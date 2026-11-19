@@ -12,6 +12,14 @@
 
 ## Next
 
+### 1.5 - Hallow accent and crash reports
+- "Use the Hallow accent" (on by default): the colour picked in Hallow Toolkit (%APPDATA%\Hallow\theme.json) becomes Remote's accent on the PC and on the phone, live
+- Crash reports kept on this PC (crashes folder, newest 20, never settings or the code), a notice on the next start, and `lastCrash` in status
+
+### 1.6 - Live stats and My buttons
+- A live stats page on the phone, Overlay-style: FPS, ping and server region from Hallow Overlay when it runs, otherwise Remote's own PC stats
+- My buttons: build your own grid from the existing actions (choose, order, rename); power buttons keep their confirm tap
+
 ### Still to check by hand
 - One Hallow icon with the real Hallow Hub 2.4 (tested against a fake Hub pipe)
 - HTTPS with a real Tailscale certificate on a real phone (tested with self-signed EC and RSA certificates only; needs HTTPS turned on in the Tailscale admin console)
@@ -19,4 +27,4 @@
 - Use it from the phone on home Wi-Fi and check the Windows firewall question (whether Windows asks, and that private networks is enough)
 
 ### Later
-- Notifications on the phone (game finished downloading, clip saved): needs HTTPS first
+- Notifications on the phone (game finished downloading, clip saved): Web Push goes through Google's / Apple's push servers and needs HTTPS
