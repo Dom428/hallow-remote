@@ -1,4 +1,4 @@
-// Hallow Remote - a small QR code encoder (byte mode, error correction L, versions 1-6 = up to 134 characters),
+﻿// Hallow Remote - a small QR code encoder (byte mode, error correction L, versions 1-6 = up to 134 characters, mask chosen by the spec's penalty score),
 // so the link never has to be sent to an online QR service. Follows the QR spec (ISO/IEC 18004) the same way Nayuki's reference code does.
 using System;
 using System.Collections.Generic;
@@ -54,7 +54,7 @@ namespace HallowRemote
                 for (int dy = -2; dy <= 2; dy++) for (int dx = -2; dx <= 2; dx++) set(al[i] + dx, al[j] + dy, Math.Max(Math.Abs(dx), Math.Abs(dy)) != 1);
             }
             Format(set, size, 0);   // reserve the format areas (real bits drawn after masking)
-            // codewords in the zig-zag order, then mask 0 ((x + y) % 2 == 0)
+            // codewords in the zig-zag order, then the mask (of the 8) with the lowest penalty score, so cameras read it easily
             int bit = 0;
             for (int right = size - 1; right >= 1; right -= 2)
             {
@@ -66,12 +66,75 @@ namespace HallowRemote
                         if (!fn[y, x] && bit < all.Count * 8) { m[y, x] = ((all[bit >> 3] >> (7 - (bit & 7))) & 1) != 0; bit++; }
                     }
             }
-            for (int y = 0; y < size; y++) for (int x = 0; x < size; x++) if (!fn[y, x] && (x + y) % 2 == 0) m[y, x] = !m[y, x];
-            Format(set, size, 0);
+            int best = 0, bestScore = int.MaxValue;
+            for (int mask = 0; mask < 8; mask++)
+            {
+                ApplyMask(m, fn, mask); Format(set, size, mask);
+                int score = Penalty(m); if (score < bestScore) { best = mask; bestScore = score; }
+                ApplyMask(m, fn, mask);   // XOR again = undo
+            }
+            ApplyMask(m, fn, best); Format(set, size, best);
             return m;
         }
 
-        // 15 format bits: error level L (01) + mask 0, BCH-protected and XORed with 0x5412
+        // the 8 mask patterns of the spec (i = row, j = column); a data module is flipped where the pattern is true
+        static void ApplyMask(bool[,] m, bool[,] fn, int mask)
+        {
+            int n = m.GetLength(0);
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++)
+            {
+                if (fn[i, j]) continue; bool f;
+                switch (mask)
+                {
+                    case 0: f = (i + j) % 2 == 0; break;
+                    case 1: f = i % 2 == 0; break;
+                    case 2: f = j % 3 == 0; break;
+                    case 3: f = (i + j) % 3 == 0; break;
+                    case 4: f = (i / 2 + j / 3) % 2 == 0; break;
+                    case 5: f = i * j % 2 + i * j % 3 == 0; break;
+                    case 6: f = (i * j % 2 + i * j % 3) % 2 == 0; break;
+                    default: f = ((i + j) % 2 + i * j % 3) % 2 == 0; break;
+                }
+                if (f) m[i, j] = !m[i, j];
+            }
+        }
+
+        // penalty score (spec section 8.8.2): runs of 5+ same colour, 2x2 blocks, finder-like 1:1:3:1:1 runs with 4 light modules beside them, dark/light balance
+        public static int Penalty(bool[,] m)
+        {
+            int n = m.GetLength(0), p = 0;
+            Func<int, int, int, bool> at = (pass, line, k) => pass == 0 ? m[line, k] : m[k, line];
+            Func<int, int, int, bool> dark = (pass, line, k) => k >= 0 && k < n && at(pass, line, k);   // outside the symbol counts as light
+            bool[] pat = { true, false, true, true, true, false, true };
+            for (int pass = 0; pass < 2; pass++)
+                for (int line = 0; line < n; line++)
+                {
+                    int run = 1;
+                    for (int k = 1; k <= n; k++)
+                    {
+                        if (k < n && at(pass, line, k) == at(pass, line, k - 1)) run++;
+                        else { if (run >= 5) p += 3 + run - 5; run = 1; }
+                    }
+                    for (int k = -4; k < n; k++)
+                    {
+                        bool hit = true; for (int t = 0; t < 7 && hit; t++) if (dark(pass, line, k + t) != pat[t]) hit = false;
+                        if (!hit) continue;
+                        bool before = true, after = true;
+                        for (int t = 1; t <= 4; t++) { if (dark(pass, line, k - t)) before = false; if (dark(pass, line, k + 6 + t)) after = false; }
+                        if (before) p += 40; if (after) p += 40;
+                    }
+                }
+            int darkCount = 0;
+            for (int y = 0; y < n; y++) for (int x = 0; x < n; x++)
+            {
+                if (m[y, x]) darkCount++;
+                if (y < n - 1 && x < n - 1 && m[y, x] == m[y + 1, x] && m[y, x] == m[y, x + 1] && m[y, x] == m[y + 1, x + 1]) p += 3;
+            }
+            p += Math.Abs(darkCount * 20 - n * n * 10) / (n * n) * 10;
+            return p;
+        }
+
+        // 15 format bits: error level L (01) + the mask number, BCH-protected and XORed with 0x5412
         static void Format(Action<int, int, bool> set, int size, int mask)
         {
             int data = (1 << 3) | mask, rem = data;

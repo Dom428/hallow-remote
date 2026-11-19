@@ -1,4 +1,4 @@
-// Hallow Remote - your phone as a remote for the Hallow apps: Mixer sliders and mic, Hub games, Toolkit game session, PC stats.
+﻿// Hallow Remote - your phone as a remote for the Hallow apps: Mixer sliders and mic, Hub games, Toolkit game session, PC stats.
 // The PC side is this small tray app; the phone side is a web page you add to your home screen.
 using System;
 using System.Linq;
@@ -19,14 +19,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.0";
+        public const string Version = "1.1";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -38,8 +38,8 @@ namespace HallowRemote
                 new MainWindow(true).SnapAll(args[si + 1]); return;
             }
             bool created;
-            var mutex = new Mutex(true, @"Local\HallowRemote", out created);
-            var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\HallowRemoteShow");
+            var mutex = new Mutex(true, @"Local\HallowRemote" + (RemoteSettings.TestDir != null ? "Test" : ""), out created);
+            var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\HallowRemoteShow" + (RemoteSettings.TestDir != null ? "Test" : ""));
             if (!created) { showEvent.Set(); return; }
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown }; LoadTheme(app);
             var w = new MainWindow(args.Contains("--tray"));
@@ -170,7 +170,7 @@ namespace HallowRemote
         {
             var l = server.Link;
             link.Text = l ?? "-";
-            qr.Source = l == null ? null : QrImage(l);
+            try { qr.Source = l == null ? null : QrImage(l); } catch { qr.Source = null; }   // a link too long for a QR code: copy it instead
             state.Text = server.Error ?? (S.Network == "lan" ? "Ready on your home network. Your phone has to be on the same Wi-Fi." : "Ready through Tailscale - works wherever your phone has Tailscale on.");
             state.Foreground = server.Error != null ? B("#F0BE5A") : B("#6ED28C");
         }

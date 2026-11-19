@@ -27,7 +27,9 @@ namespace HallowRemote
         [DataMember] public int Port = 5480;
         [DataMember] public bool TrayOnClose = true;
         [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; }
-        public static string Dir { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
+        // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
+        public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
+        public static string Dir { get { return TestDir != null ? Path.Combine(TestDir, "HallowRemote") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
         static string FilePath { get { return Path.Combine(Dir, "remote.json"); } }
         public static bool Frozen;
         public static RemoteSettings Load()
@@ -52,20 +54,34 @@ namespace HallowRemote
 
     public static class Net
     {
-        public static string Tailscale() { return Addresses().FirstOrDefault(a => a.StartsWith("100.") && IsCgnat(a)); }
-        public static string Lan() { return Addresses().FirstOrDefault(a => a.StartsWith("192.168.") || a.StartsWith("10.") && !IsVpn(a) || a.StartsWith("172.")); }
-        static bool IsCgnat(string a) { var p = a.Split('.'); int b; return p.Length == 4 && int.TryParse(p[1], out b) && b >= 64 && b <= 127; }
-        static bool IsVpn(string a) { return vpnAddrs.Contains(a); }
-        static HashSet<string> vpnAddrs = new HashSet<string>();
-        static List<string> Addresses()
+        public static string Tailscale() { return Addresses().Where(a => a.Item1.StartsWith("100.") && IsCgnat(a.Item1)).Select(a => a.Item1).FirstOrDefault(); }
+        // v1.1: the home network address is a private one on a real adapter (not a VPN, WSL, Hyper-V or VirtualBox one), preferring the adapter with the router (default gateway)
+        public static string Lan()
         {
-            var res = new List<string>(); vpnAddrs.Clear();
+            var list = Addresses().Where(a => IsPrivate(a.Item1)).ToList();
+            return list.Where(a => a.Item2).Select(a => a.Item1).FirstOrDefault() ?? list.Select(a => a.Item1).FirstOrDefault();
+        }
+        static bool IsCgnat(string a) { var p = a.Split('.'); int b; return p.Length == 4 && int.TryParse(p[1], out b) && b >= 64 && b <= 127; }
+        static bool IsPrivate(string a)
+        {
+            var p = a.Split('.'); int b; if (p.Length != 4 || !int.TryParse(p[1], out b)) return false;
+            return p[0] == "10" || (p[0] == "192" && b == 168) || (p[0] == "172" && b >= 16 && b <= 31);
+        }
+        static readonly string[] Skip = { "Nord", "OpenVPN", "WireGuard", "Hyper-V", "vEthernet", "VirtualBox", "VMware", "WSL", "Tailscale", "Loopback", "TAP-", "Wintun" };
+        // (address, its adapter has a default gateway)
+        static List<Tuple<string, bool>> Addresses()
+        {
+            var res = new List<Tuple<string, bool>>();
             foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
             {
                 if (ni.OperationalStatus != OperationalStatus.Up) continue;
-                var vpn = ni.Description.IndexOf("Nord", StringComparison.OrdinalIgnoreCase) >= 0 || ni.Name.IndexOf("Nord", StringComparison.OrdinalIgnoreCase) >= 0 || ni.Description.IndexOf("OpenVPN", StringComparison.OrdinalIgnoreCase) >= 0 || ni.Description.IndexOf("WireGuard", StringComparison.OrdinalIgnoreCase) >= 0;
-                foreach (var u in ni.GetIPProperties().UnicastAddresses)
-                    if (u.Address.AddressFamily == AddressFamily.InterNetwork) { var s = u.Address.ToString(); if (vpn) vpnAddrs.Add(s); else res.Add(s); }
+                var props = ni.GetIPProperties();
+                bool virt = Skip.Any(k => ni.Description.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0 || ni.Name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
+                bool tailscale = ni.Description.IndexOf("Tailscale", StringComparison.OrdinalIgnoreCase) >= 0 || ni.Name.IndexOf("Tailscale", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (virt && !tailscale) continue;
+                bool gw = props.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any));
+                foreach (var u in props.UnicastAddresses)
+                    if (u.Address.AddressFamily == AddressFamily.InterNetwork) { var s = u.Address.ToString(); if (!tailscale || IsCgnat(s)) res.Add(Tuple.Create(s, gw && !tailscale)); }
             }
             return res;
         }

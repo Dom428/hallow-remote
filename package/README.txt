@@ -7,6 +7,10 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.1
+- The QR code uses the pattern phone cameras read most easily (checked against the QR standard).
+- Home Wi-Fi only picks your real home-network adapter, never a VPN, WSL or Hyper-V one.
+
 ON YOUR PHONE
 - Hallow Mixer: a slider and mute for every channel, mic mute, presets, play/pause and skip
 - Hallow Hub: your recent games with their covers - tap one to start it on your PC
