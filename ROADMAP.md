@@ -17,6 +17,9 @@
 
 ## Next
 
+### 1.10 - Hallow Keys on the phone
+- A Keys tab: Hallow Keys' encrypted phone copy, opened on the phone with WebCrypto (needs HTTPS), view and copy only
+
 ### Gaps vs Unified Remote
 What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow Remote doesn't (yet):
 - Mouse trackpad and keyboard from the phone - **buildable** (SendInput on the PC; opt-in) -> 1.7
