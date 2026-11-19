@@ -7,6 +7,10 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.3
+- Live updates: the phone changes as soon as something changes on your PC.
+- Optional HTTPS with Tailscale's certificate for your PC - the window shows how.
+
 WHAT'S NEW IN 1.2
 - Hallow Clips: save a clip and watch your newest clips on the phone.
 - Hallow Vault: Back up now, and the last backup of each game.
@@ -30,6 +34,9 @@ ON YOUR PHONE
 REACHING YOUR PC
 - Anywhere (Tailscale): works wherever your phone has Tailscale switched on.
 - Home Wi-Fi only: your phone has to be on the same network.
+HTTPS (optional): the Hallow Remote window shows the steps - turn on HTTPS
+Certificates in your Tailscale admin console, then run the tailscale cert command it
+shows. Run it again every 90 days to renew. The old link forwards to the new one.
 Only someone with the link can use it. "New link" makes a new one and the old one stops working.
 
 CREDITS

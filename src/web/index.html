@@ -155,7 +155,22 @@ function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })
     .catch(function () { el('pc').textContent = 'Can\'t reach your PC - is it on, and is Hallow Remote running?'; });
 }
-load(); setInterval(function () { if (!document.hidden) load(); }, 2500);
-document.addEventListener('visibilitychange', function () { if (!document.hidden) load(); });
+// v1.3: live updates - api/wait answers as soon as something changes on the PC (or after a few seconds with fresh stats).
+// A PC with an older Hallow Remote answers 404: then the page just asks every 2.5 s, as before.
+var rev = 0, liveRun = 0, polling = false;
+function live() {
+  var run = ++liveRun;
+  (function next() {
+    if (run !== liveRun || document.hidden) return;
+    fetch(base + 'api/wait?rev=' + rev, { cache: 'no-store' }).then(function (r) { if (r.status == 404) throw 'old'; return r.json(); })
+      .then(function (s) { if (run !== liveRun) return; rev = s.rev; last = s; render(s); next(); })
+      .catch(function (e) {
+        if (e === 'old') { liveRun++; polling = true; load(); setInterval(function () { if (!document.hidden) load(); }, 2500); return; }
+        el('pc').textContent = 'Can\'t reach your PC - is it on, and is Hallow Remote running?'; setTimeout(next, 3000);
+      });
+  })();
+}
+live();
+document.addEventListener('visibilitychange', function () { if (!document.hidden) { if (polling) load(); else { rev = 0; live(); } } });
 </script>
 </body></html>

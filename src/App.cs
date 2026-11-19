@@ -19,14 +19,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.2";
+        public const string Version = "1.3";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -64,7 +64,7 @@ namespace HallowRemote
         readonly RemoteSettings S = RemoteSettings.Load();
         readonly Server server;
         readonly bool startHidden; bool exiting, toldTray;
-        Image qr; TextBlock link, state, log; WF.NotifyIcon tray; StackPanel netChips;
+        Image qr; TextBlock link, state, log, httpsText; TextBox httpsCmd; Border httpsNote; WF.NotifyIcon tray; StackPanel netChips;
 
         public MainWindow(bool hidden)
         {
@@ -92,7 +92,7 @@ namespace HallowRemote
             {
                 // Tailscale can connect after Windows starts: try again every 30 s until it's up
                 var retry = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-                retry.Tick += (s, e) => { if (server.Address == null || server.Error != null) { server.Start(); ShowLink(); } };
+                retry.Tick += (s, e) => { if (server.Address == null || server.Error != null || Tls.Stamp() != server.TlsStamp) { server.Start(); ShowLink(); } };   // v1.3: also picks up a new or renewed HTTPS certificate
                 retry.Start();
                 if (!startHidden) Show();
             }
@@ -161,7 +161,18 @@ namespace HallowRemote
             sp.Children.Add(more);
             log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
             sp.Children.Add(log);
-            sp.Children.Add(new TextBlock { Text = "Only someone with the link can use it - keep it to yourself, and press New link if it ever gets out. It works only on your home network or through your own Tailscale. " +
+            // v1.3: how to turn on HTTPS (shown in Tailscale mode until a certificate is in place)
+            var hn = new StackPanel();
+            hn.Children.Add(new TextBlock { Text = "Turn on HTTPS (optional)", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
+            httpsText = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 0, 0, 8) };
+            hn.Children.Add(httpsText);
+            httpsCmd = new TextBox { IsReadOnly = true, FontFamily = new FontFamily("Consolas"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Background = B("#1A1522"), Foreground = B("#ECE8F4"), BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 0, 8) };
+            hn.Children.Add(httpsCmd);
+            var copyCmd = new Button { Content = "Copy command", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left };
+            copyCmd.Click += (s, e) => { try { Clipboard.SetText(httpsCmd.Text); state.Text = "Command copied - paste it into PowerShell after turning on HTTPS in Tailscale."; } catch { } };
+            hn.Children.Add(copyCmd);
+            httpsNote = new Border { Child = hn, Background = B("#211B2A"), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 12), Margin = new Thickness(0, 12, 0, 0) };
+            sp.Children.Add(httpsNote);            sp.Children.Add(new TextBlock { Text = "Only someone with the link can use it - keep it to yourself, and press New link if it ever gets out. It works only on your home network or through your own Tailscale. " +
                 "The first time, Windows may ask whether Hallow Remote can use the network: allow it for private networks.",
                 Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
             sp.Children.Add(new TextBlock { Text = "Hallow Remote " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 8, 0, 0) });
@@ -175,6 +186,18 @@ namespace HallowRemote
             try { qr.Source = l == null ? null : QrImage(l); } catch { qr.Source = null; }   // a link too long for a QR code: copy it instead
             state.Text = server.Error ?? (S.Network == "lan" ? "Ready on your home network. Your phone has to be on the same Wi-Fi." : "Ready through Tailscale - works wherever your phone has Tailscale on.");
             state.Foreground = server.Error != null ? B("#F0BE5A") : B("#6ED28C");
+            if (server.Error == null && server.Https) state.Text = "Ready through Tailscale, with HTTPS (certificate good until " + server.CertUntil.ToString("d MMM yyyy") + ").";
+            ShowHttpsNote(Tls.TailscaleName(), server.TlsProblem);
+        }
+        void ShowHttpsNote(string name, string problem)
+        {
+            httpsNote.Visibility = S.Network == "tailscale" && !server.Https ? Visibility.Visible : Visibility.Collapsed;
+            var n = name ?? "<this-pc>.<your-tailnet>.ts.net";
+            httpsText.Text = (problem != null ? problem + "\n\n" : "") +
+                "With HTTPS your phone treats Hallow Remote as a real app. 1) In the Tailscale admin console, open DNS and turn on MagicDNS and HTTPS Certificates. " +
+                "2) Run this in PowerShell. Hallow Remote switches to an https link by itself within a minute (scan the new code; the old link forwards to it). " +
+                "The certificate lasts 90 days - run the command again to renew it.";
+            httpsCmd.Text = "& \"$env:ProgramFiles\\Tailscale\\tailscale.exe\" cert --cert-file \"$env:APPDATA\\HallowRemote\\tls\\" + n + ".crt\" --key-file \"$env:APPDATA\\HallowRemote\\tls\\" + n + ".key\" " + n;
         }
         static ImageSource QrImage(string text)
         {
@@ -212,6 +235,7 @@ namespace HallowRemote
             // never show the real secret in a picture
             link.Text = "http://100.90.88.26:5480/example-code/"; qr.Source = QrImage(link.Text);
             state.Text = "Ready through Tailscale - works wherever your phone has Tailscale on."; state.Foreground = B("#6ED28C");
+            ShowHttpsNote("gaming-pc.tail1234.ts.net", null);
             Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 640, 0);
         }
     }

@@ -15,6 +15,9 @@ using System.Runtime.Serialization.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
+using System.Net.Security;
+using System.Security.Authentication;
+using System.Security.Cryptography.X509Certificates;
 using System.Web.Script.Serialization;
 
 namespace HallowRemote
@@ -99,13 +102,29 @@ namespace HallowRemote
         double cpu = -1, gpu = -1, gpuTemp = -1;
         public Server(RemoteSettings s) { S = s; }
 
-        public string Link { get { return Address == null ? null : "http://" + Address + ":" + S.Port + "/" + S.Code + "/"; } }
+        public string Link { get { return Address == null ? null : (cert != null ? "https://" + TlsName : "http://" + Address) + ":" + S.Port + "/" + S.Code + "/"; } }
+
+        // v1.3: HTTPS with Tailscale's certificate for this PC, when its files are in the tls folder (Tailscale mode only; the name only works through Tailscale)
+        X509Certificate2 cert;
+        public string TlsName, TlsProblem, TlsStamp;
+        public bool Https { get { return cert != null; } }
+        public DateTime CertUntil { get { return cert != null ? cert.NotAfter : DateTime.MinValue; } }
+        void LoadTls()
+        {
+            var old = cert; cert = null; TlsName = null; TlsProblem = null;
+            if (old != null) try { old.Dispose(); } catch { }
+            TlsStamp = Tls.Stamp();
+            if (S.Network != "tailscale") return;
+            try { Directory.CreateDirectory(Tls.Dir); } catch { }
+            string name, problem; cert = Tls.Load(out name, out problem); TlsName = cert != null ? name : null; TlsProblem = problem;
+        }
 
         public bool Start()
         {
             Stop(); Error = null;
             Address = S.Network == "lan" ? Net.Lan() : Net.Tailscale();
             var forced = Environment.GetEnvironmentVariable("HALLOW_REMOTE_ADDR"); if (forced == "127.0.0.1") Address = forced;   // testing on this PC only
+            LoadTls();
             if (Address == null) { Error = S.Network == "lan" ? "No home network address found." : "Tailscale isn't connected on this PC."; WriteStatus(); return false; }
             try { listener = new TcpListener(IPAddress.Parse(Address), S.Port); listener.Start(); }
             catch (Exception e) { Error = "Couldn't listen on " + Address + ":" + S.Port + " - " + e.Message; listener = null; WriteStatus(); return false; }
@@ -121,7 +140,7 @@ namespace HallowRemote
         public string StatusJson()
         {
             return Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version }, { "updated", Family.Time(DateTime.Now) }, { "running", true },
-                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "error", Error } });
+                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "https", cert != null }, { "httpsProblem", TlsProblem }, { "error", Error } });
         }
         public void WriteStatus() { if (!Snap.On) Family.WriteStatus(StatusJson()); }
         public string Command(string line)
@@ -145,7 +164,15 @@ namespace HallowRemote
             try
             {
                 client.ReceiveTimeout = 4000; client.SendTimeout = 4000;
-                var st = client.GetStream(); var buf = new byte[8192]; int n = 0;
+                Stream st = client.GetStream(); var c0 = cert; bool plainWhileTls = false;
+                if (c0 != null)
+                {
+                    // v1.3: one port for both - a TLS hello starts with 0x16; plain HTTP to an HTTPS server gets sent to the https link
+                    int first = st.ReadByte(); if (first < 0) return;
+                    if (first == 0x16) { var ssl = new SslStream(new PrefixStream(st, first), false); ssl.AuthenticateAsServer(c0, false, SslProtocols.Tls12 | (SslProtocols)12288, false); st = ssl; }
+                    else { st = new PrefixStream(st, first); plainWhileTls = true; }
+                }
+                var buf = new byte[8192]; int n = 0;
                 while (n < buf.Length) { int r = st.Read(buf, n, buf.Length - n); if (r <= 0) break; n += r; if (Encoding.ASCII.GetString(buf, 0, n).Contains("\r\n\r\n")) break; }
                 var lines = Encoding.ASCII.GetString(buf, 0, n).Split('\n');
                 var line = lines[0].Trim();
@@ -157,6 +184,12 @@ namespace HallowRemote
                 var path = qi < 0 ? target : target.Substring(0, qi); var query = qi < 0 ? "" : target.Substring(qi + 1);
                 var segs = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
                 if (segs.Length == 0 || !Same(segs[0], S.Code)) { Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found")); return; }
+                if (plainWhileTls)
+                {
+                    var to = "https://" + TlsName + ":" + S.Port + target;
+                    var h = Encoding.ASCII.GetBytes("HTTP/1.1 301 Moved Permanently\r\nLocation: " + to + "\r\nContent-Length: 0\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n");
+                    st.Write(h, 0, h.Length); st.Flush(); return;
+                }
                 var rest = "/" + string.Join("/", segs.Skip(1));
                 var q = Query(query);
                 if (rest == "/") Send(st, 200, "text/html; charset=utf-8", Resource("index.html"));
@@ -164,7 +197,8 @@ namespace HallowRemote
                 else if (rest == "/manifest.json") Send(st, 200, "application/manifest+json", Encoding.UTF8.GetBytes(
                     "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
-                else if (rest == "/api/do") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Do(q)));
+                else if (rest == "/api/do") { var res = Do(q); Changed(); Send(st, 200, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest == "/api/wait") { client.SendTimeout = 10000; Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Wait(q))); }
                 else if (rest.StartsWith("/api/cover/")) { int i; var img = int.TryParse(rest.Substring(11), out i) ? Cover(i) : null; if (img != null) Send(st, 200, "image/jpeg", img, true); else Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("No cover")); }
                 else if (rest.StartsWith("/api/clip/") || rest.StartsWith("/api/thumb/"))
                 {
@@ -359,7 +393,8 @@ namespace HallowRemote
             return new Dictionary<string, object> { { "visible", Get(s, "visible") is bool && (bool)Get(s, "visible") } };
         }
 
-        string State()
+        string State() { return js.Serialize(StateObj()); }
+        Dictionary<string, object> StateObj()
         {
             double used = -1, total = -1;
             try { var m = new MEMORYSTATUSEX(); if (GlobalMemoryStatusEx(m)) { total = m.ullTotalPhys / 1073741824.0; used = (m.ullTotalPhys - m.ullAvailPhys) / 1073741824.0; } } catch { }
@@ -375,7 +410,69 @@ namespace HallowRemote
                 { "session", SessionOn() },
                 { "clips", Clips() }, { "vault", Vault() }, { "overlay", Overlay() },
                 { "time", DateTime.Now.ToString("HH:mm") } };
-            return js.Serialize(o);
+            return o;
+        }
+
+        // ---- v1.3: live updates. The phone asks api/wait?rev=<n>: the answer comes as soon as something on the PC changes
+        // (mixer, games, clips, backups, overlay, session), or after 3 s with fresh PC stats. One watcher checks once a second while a phone
+        // is looking, and Hallow Mixer's own long poll (GET /wait, Mixer 3.14+) wakes it at once; older Mixers (404) are just polled.
+        readonly object live = new object();
+        int rev = new Random().Next(1000, 900000); string lastKey; DateTime lastWaiter; bool watching;
+        readonly AutoResetEvent kick = new AutoResetEvent(false);
+        string Snapshot()
+        {
+            var o = StateObj();
+            var k = new Dictionary<string, object>(o); k.Remove("stats"); k.Remove("time");
+            var key = js.Serialize(k); int r;
+            lock (live) { if (key != lastKey) { if (lastKey != null) rev++; lastKey = key; Monitor.PulseAll(live); } r = rev; }
+            o["rev"] = r; return js.Serialize(o);
+        }
+        string Wait(Dictionary<string, string> q)
+        {
+            int want; string rs; q.TryGetValue("rev", out rs); int.TryParse(rs ?? "", out want);
+            lock (live)
+            {
+                lastWaiter = DateTime.UtcNow;
+                if (!watching) { watching = true; new Thread(Watch) { IsBackground = true, Name = "live" }.Start(); new Thread(WatchMixer) { IsBackground = true, Name = "live mixer" }.Start(); }
+                if (want == rev) Monitor.Wait(live, 3000);
+            }
+            return Snapshot();
+        }
+        public void Changed() { kick.Set(); }   // something was done from the phone
+        void Watch()
+        {
+            while (true)
+            {
+                lock (live) if ((DateTime.UtcNow - lastWaiter).TotalSeconds > 60) { watching = false; return; }   // no phone looking: stop
+                try { Snapshot(); } catch { }
+                kick.WaitOne(1000);
+            }
+        }
+        void WatchMixer()
+        {
+            int mrev = 0;
+            while (true)
+            {
+                lock (live) if (!watching) return;
+                int code; var m = MixerWait(mrev, out code);
+                if (code == 404) return;   // an older Mixer: the watcher's polling covers it
+                if (m == null) { Thread.Sleep(3000); continue; }
+                object rv; int nr; if (m.TryGetValue("rev", out rv) && int.TryParse(Convert.ToString(rv), out nr)) { if (mrev != 0 && nr != mrev) kick.Set(); mrev = nr; } else return;
+            }
+        }
+        static Dictionary<string, object> MixerWait(int mrev, out int code)
+        {
+            code = 0;
+            try
+            {
+                if (RemoteSettings.TestDir == null && Process.GetProcessesByName("HallowMixer").Length == 0) return null;
+                var f = Path.Combine(Family.DataDir("Mixer"), "api.json"); if (!File.Exists(f)) return null;
+                var a = js.Deserialize<Dictionary<string, object>>(File.ReadAllText(f));
+                var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + a["port"] + "/api/wait?rev=" + mrev); req.Headers["X-Hallow-Key"] = a["key"] as string; req.Timeout = 32000; req.ReadWriteTimeout = 32000; req.Proxy = null;
+                using (var r = req.GetResponse()) using (var rd = new StreamReader(r.GetResponseStream())) { code = 200; return js.Deserialize<Dictionary<string, object>>(rd.ReadToEnd()); }
+            }
+            catch (WebException e) { var hr = e.Response as HttpWebResponse; if (hr != null) code = (int)hr.StatusCode; return null; }
+            catch { return null; }
         }
 
         // ---- what the phone can do: a fixed list, nothing else
