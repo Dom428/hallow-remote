@@ -30,7 +30,9 @@ namespace HallowRemote
         [DataMember] public int Port = 5480;
         [DataMember] public bool TrayOnClose = true;
         [DataMember] public bool UseHallowIcon = true;   // v1.4: hide this tray icon while Hallow Hub hosts the one Hallow icon
-        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; }
+        [DataMember] public bool UseHallowAccent = true;   // v1.5: the colour picked in Hallow Toolkit
+        [DataMember] public string LastCrashShown = "";    // v1.5: the crash report the notice was last shown for (a file name)
+        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
         public static string Dir { get { return TestDir != null ? Path.Combine(TestDir, "HallowRemote") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
@@ -142,8 +144,9 @@ namespace HallowRemote
         public string StatusJson()
         {
             return Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version }, { "updated", Family.Time(DateTime.Now) }, { "running", true },
-                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "https", cert != null }, { "httpsProblem", TlsProblem }, { "paused", Paused }, { "ownIcon", OwnIcon }, { "error", Error } });
+                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "https", cert != null }, { "httpsProblem", TlsProblem }, { "paused", Paused }, { "ownIcon", OwnIcon }, { "lastCrash", LastCrashIso() }, { "error", Error } });
         }
+        static string LastCrashIso() { var t = Crash.LastTime(); return t == null ? null : Family.Time(t.Value); }
         public void WriteStatus() { if (!Snap.On) Family.WriteStatus(StatusJson()); }
         public string Command(string line)
         {
@@ -411,6 +414,7 @@ namespace HallowRemote
                 { "hub", hub != null }, { "games", games },
                 { "session", SessionOn() },
                 { "clips", Clips() }, { "vault", Vault() }, { "overlay", Overlay() },
+                { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;
         }

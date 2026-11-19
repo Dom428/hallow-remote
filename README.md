@@ -17,6 +17,7 @@ The PC side is a small tray app that serves a phone web page (add it to your hom
 
 ## What's new
 
+- **1.5** - The Hallow accent: the colour you pick in Hallow Toolkit becomes Remote's accent on the PC and on your phone, live (setting "Use the Hallow accent", on by default). Crash reports are kept on this PC (`%APPDATA%\HallowRemote\crashes`, newest 20, never your settings or the link's code) with a notice on the next start - nothing is sent anywhere.
 - **1.4** - One Hallow icon: when Hallow Hub 2.4+ hosts the family's tray icon, Remote hides its own and lives in Hub's menu (Show the phone code, Copy link, Pause the remote). Setting "Use the Hallow icon" (on by default). The link and its code never go to Hub - Copy link runs inside Remote.
 - **1.3** - Live updates: the phone changes the moment something changes on the PC (mic, mixer, clips, backups...), no refreshing. Optional HTTPS with Tailscale's own certificate for your PC - the window shows how to turn it on; the old http link forwards to the new one.
 - **1.2** - Hallow Clips (save a clip, watch your newest clips on the phone), Hallow Vault (back up now, last backup per game), Hallow Overlay (show / hide), and sleep / shut down / lock with a confirm tap. Remote joins the Hallow family link (`HallowRemote.exe --cmd ping` / `status`).

@@ -19,7 +19,7 @@ namespace HallowRemote
         // exact label -> icon
         static readonly Dictionary<string, string> Labels = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
             { "Copy link", "share-nodes" }, { "Open on this PC", "arrow-up-right-from-square" }, { "New link", "arrows-rotate" }, { "x", "xmark" }, { "OK", "check" },
-            { "Anywhere (Tailscale)", "signal" }, { "Copy command", "terminal" }, { "Home Wi-Fi only", "house" },
+            { "Anywhere (Tailscale)", "signal" }, { "Copy command", "terminal" }, { "Show details", "eye" }, { "Open folder", "folder-open" }, { "Home Wi-Fi only", "house" },
         };
         static readonly string[][] Prefixes = { };
         public static string ForLabel(string label)

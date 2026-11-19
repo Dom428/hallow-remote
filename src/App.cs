@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.4.0.0")]
-[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.4";
+        public const string Version = "1.5";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -44,16 +44,23 @@ namespace HallowRemote
             var mutex = new Mutex(true, @"Local\HallowRemote" + (RemoteSettings.TestDir != null ? "Test" : ""), out created);
             var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\HallowRemoteShow" + (RemoteSettings.TestDir != null ? "Test" : ""));
             if (!created) { showEvent.Set(); return; }
+            Crash.Install();   // v1.5: crash reports, kept on this PC
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown }; LoadTheme(app);
+            app.DispatcherUnhandledException += (s, e) => { Crash.Write(e.Exception); e.Handled = true; Environment.Exit(1); };   // report saved; close without Windows' error dialog
             var w = new MainWindow(args.Contains("--tray"));
             new Thread(() => { while (showEvent.WaitOne()) w.Dispatcher.BeginInvoke(new Action(w.ShowFromTray)); }) { IsBackground = true }.Start();
             app.Run();
             GC.KeepAlive(mutex);
         }
-        static void LoadTheme(Application app)
+        // v1.5: the accent in use ("#RRGGBB") - the Hallow accent from Hallow Toolkit, or Remote's own orange
+        public static string AccentHex = Accent.Default;
+        public static void LoadTheme(Application app)
         {
-            using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("HallowRemote.Theme.xaml"))
-                app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Load(s));
+            string xaml;
+            using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("HallowRemote.Theme.xaml")) using (var r = new System.IO.StreamReader(s)) xaml = r.ReadToEnd();
+            AccentHex = Accent.Current(RemoteSettings.Load().UseHallowAccent);
+            app.Resources.MergedDictionaries.Clear();
+            app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(Accent.ApplyTo(xaml, AccentHex)));
         }
     }
 
@@ -85,6 +92,7 @@ namespace HallowRemote
                 }
                 else Quit();
             };
+            Crash.Secret = S.Code;
             server.Log = m => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  From your phone: " + m));
             if (!Snap.On) { server.Start(); SetupTray(); Family.Serve("Remote", Command); }
             else { server.Address = "100.90.88.26"; }
@@ -97,6 +105,13 @@ namespace HallowRemote
                 retry.Start();
                 // v1.4: one Hallow icon - every 5 s ask Hallow Hub whether it hosts the tray menu; hide this icon while it does
                 var host = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; host.Tick += (s, e) => CheckHost(); host.Start(); CheckHost();
+                // v1.5: the Hallow accent, live (the folder may only appear later, when Hallow Toolkit first saves a colour)
+                accentWatch = Accent.Watch(() => Dispatcher.BeginInvoke(new Action(ApplyAccent)));
+                retry.Tick += (s, e) => { if (accentWatch == null) { accentWatch = Accent.Watch(() => Dispatcher.BeginInvoke(new Action(ApplyAccent))); if (accentWatch != null) ApplyAccent(); } };
+                Loaded += (s, e) => ShowCrashNotice();
+                if (startHidden) Dispatcher.BeginInvoke(new Action(ShowCrashNotice), DispatcherPriority.ApplicationIdle);
+                if (RemoteSettings.TestDir != null && Environment.GetEnvironmentVariable("HALLOW_REMOTE_CRASHTEST") == "1")   // developer test only
+                    Dispatcher.BeginInvoke(new Action(() => { throw new InvalidOperationException("Crash test - link " + server.Link); }), DispatcherPriority.ApplicationIdle);
                 if (!startHidden) Show();
             }
         }
@@ -112,7 +127,7 @@ namespace HallowRemote
             var sp = new StackPanel { Margin = new Thickness(26, 16, 26, 20) };
             var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 14) };
             try { title.Children.Add(new Image { Source = AppIcon(), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) }); } catch { }
-            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B("#F07820"), VerticalAlignment = VerticalAlignment.Center });
+            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentHex), VerticalAlignment = VerticalAlignment.Center });
             title.Children.Add(new TextBlock { Text = " REMOTE", FontSize = 22, FontWeight = FontWeights.Light, VerticalAlignment = VerticalAlignment.Center });
             sp.Children.Add(title);
             var row = new DockPanel();
@@ -162,6 +177,7 @@ namespace HallowRemote
             sw("Keep running in the tray when I close this window", S.TrayOnClose, v => S.TrayOnClose = v);
             sw("Start with Windows (in the tray)", StartsWithWindows(), v => SetStartWithWindows(v));
             sw("Use the Hallow icon (when Hallow Hub runs, Hallow Remote lives in its tray menu instead of having its own icon)", S.UseHallowIcon, v => { S.UseHallowIcon = v; CheckHost(); });
+            sw("Use the Hallow accent (the colour picked in Hallow Toolkit, here and on your phone)", S.UseHallowAccent, v => { S.UseHallowAccent = v; S.Save(); Dispatcher.BeginInvoke(new Action(ApplyAccent)); });
             sp.Children.Add(more);
             log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
             sp.Children.Add(log);
@@ -236,6 +252,45 @@ namespace HallowRemote
             tray.MouseClick += (s, e) => { if (e.Button == WF.MouseButtons.Left) ShowFromTray(); };
         }
         public void ShowFromTray() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
+        // ---- v1.5: the Hallow accent changed (or the setting did): reload the theme and rebuild the window
+        System.IO.FileSystemWatcher accentWatch;
+        void ApplyAccent()
+        {
+            var a = Accent.Current(S.UseHallowAccent); if (a == Program.AccentHex) return;
+            Program.LoadTheme(Application.Current);
+            Content = Build(); ShowLink(); server.Changed();
+        }
+        // ---- v1.5: "Hallow Remote closed unexpectedly last time" - once per crash report
+        bool crashShown;
+        void ShowCrashNotice()
+        {
+            if (crashShown) return; crashShown = true;
+            var f = Crash.Last(); if (f == null) return;
+            var name = System.IO.Path.GetFileName(f); if (name == S.LastCrashShown) return;
+            S.LastCrashShown = name; S.Save();
+            CrashWindow(f).Show();
+        }
+        Window CrashWindow(string file)
+        {
+            var w = new Window { Title = "Hallow Remote", Width = 440, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Background = (Brush)FindResource("Bg"), Foreground = (Brush)FindResource("Text"), FontFamily = new FontFamily("Segoe UI"), FontSize = 12.5, Topmost = true };
+            try { w.Icon = AppIcon(); } catch { }
+            w.SourceInitialized += (s, e) => { int dark = 1; DwmSetWindowAttribute(new WindowInteropHelper(w).Handle, 20, ref dark, 4); };
+            var sp = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
+            sp.Children.Add(new TextBlock { Text = "Hallow Remote closed unexpectedly last time", FontSize = 15, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
+            DateTime when = DateTime.Now; try { when = System.IO.File.GetLastWriteTime(file); } catch { }
+            sp.Children.Add(new TextBlock { Text = "On " + when.ToString("d MMM yyyy, HH:mm") + ". A report was saved on this PC - nothing was sent anywhere.", Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14) });
+            var row = new WrapPanel();
+            var details = new Button { Content = "Show details", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 0) };
+            details.Click += (s, e) => { try { System.Diagnostics.Process.Start("notepad.exe", "\"" + file + "\""); } catch { } };
+            var folder = new Button { Content = "Open folder", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 0) };
+            folder.Click += (s, e) => { try { System.Diagnostics.Process.Start("explorer.exe", "/select,\"" + file + "\""); } catch { } };
+            var ok = new Button { Content = "OK", Style = (Style)FindResource("Accent"), MinWidth = 70 }; ok.Click += (s, e) => w.Close();
+            row.Children.Add(details); row.Children.Add(folder); row.Children.Add(ok);
+            sp.Children.Add(row); w.Content = sp;
+            return w;
+        }
+
         void Quit() { exiting = true; server.Stop(); if (tray != null) { tray.Visible = false; tray.Dispose(); } Application.Current.Shutdown(); }
 
         // ---- v1.4: one Hallow icon (Hallow Hub hosts the tray menu). The link and its code never go over the pipe:
@@ -335,6 +390,7 @@ namespace HallowRemote
             state.Text = "Ready through Tailscale - works wherever your phone has Tailscale on."; state.Foreground = B("#6ED28C");
             ShowHttpsNote("gaming-pc.tail1234.ts.net", null);
             Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 640, 0);
+            Snap.Save(CrashWindow(System.IO.Path.Combine(dir, "example.txt")), System.IO.Path.Combine(dir, "crash.png"), 440, 0);
         }
     }
 }

@@ -6,10 +6,11 @@
 <link rel="manifest" href="manifest.json"><link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="icon.png">
 <title>Hallow</title>
 <style>
+:root{--accent:#f07820;--on-accent:#1a0e04}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:#16121c;color:#ece8f4;font:15px/1.35 "Segoe UI",system-ui,-apple-system,sans-serif;padding:16px 14px calc(30px + env(safe-area-inset-bottom))}
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-h1{margin:0;font-size:22px;color:#f07820;letter-spacing:.5px}h1 span{color:#ece8f4;font-weight:300}
+h1{margin:0;font-size:22px;color:var(--accent);letter-spacing:.5px}h1 span{color:#ece8f4;font-weight:300}
 .sub{color:#8f88a0;font-size:13px}
 h2{font-size:12px;color:#a98be0;letter-spacing:.8px;text-transform:uppercase;margin:22px 2px 10px}
 .card{background:#211b2a;border:1px solid #2e2639;border-radius:16px;padding:14px}
@@ -20,9 +21,9 @@ h2{font-size:12px;color:#a98be0;letter-spacing:.8px;text-transform:uppercase;mar
 .mic.on{background:#e0424c;color:#fff}
 .row{display:flex;align-items:center;gap:10px;margin:10px 0}
 .row .n{width:86px;font-weight:600}.row .p{width:44px;text-align:right;color:#8f88a0;font-size:13px}
-input[type=range]{flex:1;accent-color:var(--c,#f07820);height:28px}
+input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}
 .btn{border:0;border-radius:12px;padding:9px 13px;background:#2a2333;color:#ece8f4;font-weight:600;font-size:14px}
-.btn.m{min-width:64px}.btn.on{background:#e0424c;color:#fff}.btn.go{background:#f07820;color:#1a0e04}
+.btn.m{min-width:64px}.btn.on{background:#e0424c;color:#fff}.btn.go{background:var(--accent);color:var(--on-accent)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .np .t{font-weight:700;font-size:16px}.np .a{color:#8f88a0;font-size:13px;margin:2px 0 10px}.np .b{display:flex;gap:8px}
 .games{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
@@ -72,6 +73,7 @@ var timers = {};
 function slide(ch, v) { el('p_' + ch).textContent = v + '%'; clearTimeout(timers[ch]); timers[ch] = setTimeout(function () { act('a=set&ch=' + ch + '&v=' + v, true); }, 150); }
 function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cls || '') + '">' + (v < 0 ? '-' : v + unit) + '</b><small>' + label + '</small></div>'; }
 function render(s) {
+  if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
   el('pc').textContent = s.pc; el('time').textContent = s.time;
   var t = s.stats, ram = t.ramTotal > 0 ? t.ramUsed / t.ramTotal : 0;
   el('stats').innerHTML = stat('CPU', t.cpu, '%', t.cpu > 90 ? 'warn' : '') + stat('GPU', t.gpu, '%') + stat('GPU temp', t.gpuTemp, '°', t.gpuTemp >= 85 ? 'bad' : t.gpuTemp >= 78 ? 'warn' : '') +
@@ -134,7 +136,7 @@ function render(s) {
   el('overlay').innerHTML = !o ? '' : '<h2>Hallow Overlay</h2><div class="card session"><div><b>Overlay</b><div class="sub">' + (o.visible ? 'On screen' : 'Hidden') + '</div></div>' +
     '<button class="btn ' + (o.visible ? '' : 'go') + '" onclick="act(\'a=overlay&do=' + (o.visible ? 'hide' : 'show') + '\')">' + (o.visible ? 'Hide' : 'Show') + '</button></div>';
 }
-var lastClips = '';
+var lastClips = '', curAccent = '';
 function dur(sec) { sec = Math.round(sec || 0); return Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2); }
 function saveClip() { var b = el('saveclip'); if (b) { b.disabled = true; b.textContent = 'Saving...'; } act('a=clip').then(function () { lastClips = ''; load(); }); }
 function watch(id, title) { el('ptitle').textContent = title; var v = el('video'); v.src = base + 'api/clip/' + id; el('player').style.display = 'flex'; v.play().catch(function () {}); }

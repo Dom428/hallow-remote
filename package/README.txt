@@ -7,6 +7,10 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.5
+- The Hallow accent: the colour you pick in Hallow Toolkit, here and on your phone.
+- Crash reports kept on this PC (never sent anywhere), with a notice next time.
+
 WHAT'S NEW IN 1.4
 - One Hallow icon: with Hallow Hub 2.4+ running, Remote lives in the Hallow icon's menu
   (Show the phone code, Copy link, Pause the remote). Setting: Use the Hallow icon.

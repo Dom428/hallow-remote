@@ -9,12 +9,9 @@
 | **1.2** | Hallow Clips (save a clip, newest clips, watch them on the phone with seeking), Hallow Vault (back up now, last backup per game), Hallow Overlay (show / hide), sleep / shut down / lock with a confirm tap; Remote's own family pipe (ping, status) and `--cmd` |
 | **1.3** | Live updates (long poll, woken at once by Hallow Mixer's own long poll, by phone actions, or a 1 s check of the other apps); HTTPS with Tailscale's certificate when its files are in the tls folder (one port, plain links forward to https), with the steps in the PC window |
 | **1.4** | One Hallow icon: pipe `open` / `menu` (Show the phone code, Copy link, Pause the remote) / `invoke` / `quit`; "Use the Hallow icon" (default on) hides Remote's tray icon while Hub answers `tray-host` on:true and shows it again otherwise; balloons through Hub `notify`; the link and code never cross the pipe |
+| **1.5** | The Hallow accent from Hallow Toolkit (theme.json, watched live) on the PC window and the phone page (`--accent` CSS variable from the state); crash reports kept on this PC with a once-per-crash notice and `lastCrash` in status |
 
 ## Next
-
-### 1.5 - Hallow accent and crash reports
-- "Use the Hallow accent" (on by default): the colour picked in Hallow Toolkit (%APPDATA%\Hallow\theme.json) becomes Remote's accent on the PC and on the phone, live
-- Crash reports kept on this PC (crashes folder, newest 20, never settings or the code), a notice on the next start, and `lastCrash` in status
 
 ### 1.6 - Live stats and My buttons
 - A live stats page on the phone, Overlay-style: FPS, ping and server region from Hallow Overlay when it runs, otherwise Remote's own PC stats
