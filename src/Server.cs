@@ -93,7 +93,7 @@ namespace HallowRemote
         class MEMORYSTATUSEX { public uint dwLength = 64; public uint dwMemoryLoad; public ulong ullTotalPhys, ullAvailPhys, ullTotalPageFile, ullAvailPageFile, ullTotalVirtual, ullAvailVirtual, ullAvailExtendedVirtual; }
         [DllImport("kernel32.dll")] static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX m);
 
-        readonly RemoteSettings S; TcpListener listener; volatile bool stop;
+        readonly RemoteSettings S; TcpListener listener;
         public string Address, Error;
         public Action<string> Log;
         double cpu = -1, gpu = -1, gpuTemp = -1;
@@ -103,23 +103,39 @@ namespace HallowRemote
 
         public bool Start()
         {
-            Stop(); stop = false; Error = null;
+            Stop(); Error = null;
             Address = S.Network == "lan" ? Net.Lan() : Net.Tailscale();
             var forced = Environment.GetEnvironmentVariable("HALLOW_REMOTE_ADDR"); if (forced == "127.0.0.1") Address = forced;   // testing on this PC only
-            if (Address == null) { Error = S.Network == "lan" ? "No home network address found." : "Tailscale isn't connected on this PC."; return false; }
+            if (Address == null) { Error = S.Network == "lan" ? "No home network address found." : "Tailscale isn't connected on this PC."; WriteStatus(); return false; }
             try { listener = new TcpListener(IPAddress.Parse(Address), S.Port); listener.Start(); }
-            catch (Exception e) { Error = "Couldn't listen on " + Address + ":" + S.Port + " - " + e.Message; listener = null; return false; }
-            new Thread(Accept) { IsBackground = true, Name = "remote accept" }.Start();
-            new Thread(SamplePc) { IsBackground = true, Priority = ThreadPriority.BelowNormal }.Start();
+            catch (Exception e) { Error = "Couldn't listen on " + Address + ":" + S.Port + " - " + e.Message; listener = null; WriteStatus(); return false; }
+            var l = listener; new Thread(() => Accept(l)) { IsBackground = true, Name = "remote accept" }.Start();
+            if (!sampling) { sampling = true; new Thread(SamplePc) { IsBackground = true, Priority = ThreadPriority.BelowNormal }.Start(); }
+            WriteStatus();
             return true;
         }
-        public void Stop() { stop = true; try { if (listener != null) listener.Stop(); } catch { } listener = null; }
+        bool sampling;
+        public void Stop() { try { if (listener != null) listener.Stop(); } catch { } listener = null; }
 
-        void Accept()
+        // ---- v1.2: Remote in the Hallow family: status for the other apps (never the link's code)
+        public string StatusJson()
         {
-            while (!stop)
+            return Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version }, { "updated", Family.Time(DateTime.Now) }, { "running", true },
+                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "error", Error } });
+        }
+        public void WriteStatus() { if (!Snap.On) Family.WriteStatus(StatusJson()); }
+        public string Command(string line)
+        {
+            if (line == "ping") return "ok " + Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version } });
+            if (line == "status") return "ok " + StatusJson();
+            return "error unknown command";
+        }
+
+        void Accept(TcpListener l)
+        {
+            while (true)
             {
-                TcpClient c; try { c = listener.AcceptTcpClient(); } catch { return; }
+                TcpClient c; try { c = l.AcceptTcpClient(); } catch { return; }
                 ThreadPool.QueueUserWorkItem(_ => Handle(c));
             }
         }
@@ -131,7 +147,10 @@ namespace HallowRemote
                 client.ReceiveTimeout = 4000; client.SendTimeout = 4000;
                 var st = client.GetStream(); var buf = new byte[8192]; int n = 0;
                 while (n < buf.Length) { int r = st.Read(buf, n, buf.Length - n); if (r <= 0) break; n += r; if (Encoding.ASCII.GetString(buf, 0, n).Contains("\r\n\r\n")) break; }
-                var line = Encoding.ASCII.GetString(buf, 0, n).Split('\n')[0].Trim();
+                var lines = Encoding.ASCII.GetString(buf, 0, n).Split('\n');
+                var line = lines[0].Trim();
+                var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var h in lines.Skip(1)) { var c = h.IndexOf(':'); if (c > 0) headers[h.Substring(0, c).Trim()] = h.Substring(c + 1).Trim(); }
                 var parts = line.Split(' ');
                 if (parts.Length < 2 || parts[0] != "GET") { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes("Only GET")); return; }
                 var target = parts[1]; var qi = target.IndexOf('?');
@@ -147,6 +166,14 @@ namespace HallowRemote
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
                 else if (rest == "/api/do") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Do(q)));
                 else if (rest.StartsWith("/api/cover/")) { int i; var img = int.TryParse(rest.Substring(11), out i) ? Cover(i) : null; if (img != null) Send(st, 200, "image/jpeg", img, true); else Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("No cover")); }
+                else if (rest.StartsWith("/api/clip/") || rest.StartsWith("/api/thumb/"))
+                {
+                    // only a file Hallow Clips lists in its status, picked by its id - never a path from the phone
+                    bool video = rest.StartsWith("/api/clip/"); var f = ClipFile(rest.Substring(video ? 10 : 11), video);
+                    if (f == null) Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found"));
+                    else if (video) { client.SendTimeout = 30000; string range; headers.TryGetValue("Range", out range); SendFile(st, f, "video/mp4", range); }
+                    else Send(st, 200, "image/jpeg", File.ReadAllBytes(f), true);
+                }
                 else Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found"));
             }
             catch { }
@@ -179,13 +206,40 @@ namespace HallowRemote
                 "\r\nCache-Control: " + (cache ? "max-age=3600" : "no-store") + "\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
             var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length); st.Write(body, 0, body.Length); st.Flush();
         }
+        // v1.2: a file with HTTP Range support (phones fetch videos in pieces and seek with it)
+        static void SendFile(Stream st, string path, string type, string range)
+        {
+            using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                long len = f.Length, from = 0, to = len - 1; int code = 200;
+                if (range != null && range.StartsWith("bytes=") && range.IndexOf(',') < 0)
+                {
+                    var r = range.Substring(6).Split('-'); long a, b;
+                    if (r.Length == 2 && r[0].Length == 0 && long.TryParse(r[1], out b) && b > 0) { from = Math.Max(0, len - b); code = 206; }
+                    else if (r.Length == 2 && long.TryParse(r[0], out a))
+                    {
+                        if (a >= len) { var bad = Encoding.ASCII.GetBytes("HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */" + len + "\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"); st.Write(bad, 0, bad.Length); return; }
+                        from = a; if (r[1].Length > 0 && long.TryParse(r[1], out b)) to = Math.Min(b, len - 1); code = 206;
+                    }
+                }
+                if (to < from) to = from - 1;
+                long count = to - from + 1;
+                var head = "HTTP/1.1 " + (code == 206 ? "206 Partial Content" : "200 OK") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + count + "\r\nAccept-Ranges: bytes\r\n" +
+                    (code == 206 ? "Content-Range: bytes " + from + "-" + to + "/" + len + "\r\n" : "") +
+                    "Cache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
+                var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length);
+                f.Position = from; var buf = new byte[65536];
+                while (count > 0) { int n = f.Read(buf, 0, (int)Math.Min(buf.Length, count)); if (n <= 0) break; st.Write(buf, 0, n); count -= n; }
+                st.Flush();
+            }
+        }
 
         // ---- what the phone shows
         void SamplePc()
         {
             PerformanceCounter pc = null; try { pc = new PerformanceCounter("Processor Information", "% Processor Utility", "_Total"); pc.NextValue(); } catch { }
             var smi = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvidia-smi.exe");
-            while (!stop)
+            while (true)
             {
                 Thread.Sleep(2000);
                 try { if (pc != null) cpu = Math.Min(100, pc.NextValue()); } catch { }
@@ -200,40 +254,109 @@ namespace HallowRemote
             }
         }
 
-        static readonly JavaScriptSerializer js = new JavaScriptSerializer();
-        static Dictionary<string, object> Mixer(string path)
+        static readonly JavaScriptSerializer js = new JavaScriptSerializer { MaxJsonLength = 8 * 1024 * 1024 };
+        static Dictionary<string, object> Mixer(string path) { return Mixer(path, 1500); }
+        static Dictionary<string, object> Mixer(string path, int timeout)
         {
             try
             {
-                var f = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"HallowMixer\api.json"); if (!File.Exists(f)) return null;
+                if (DateTime.UtcNow < mixerDownUntil) return null;   // v1.2: Windows takes ~2 s to refuse a closed port, so a stopped Mixer is skipped for a few seconds
+                if (RemoteSettings.TestDir == null && Process.GetProcessesByName("HallowMixer").Length == 0) return null;
+                var f = Path.Combine(Family.DataDir("Mixer"), "api.json"); if (!File.Exists(f)) return null;
                 var a = js.Deserialize<Dictionary<string, object>>(File.ReadAllText(f));
-                var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + a["port"] + path); req.Headers["X-Hallow-Key"] = a["key"] as string; req.Timeout = 1500; req.Proxy = null;
+                var req = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + a["port"] + path); req.Headers["X-Hallow-Key"] = a["key"] as string; req.Timeout = timeout; req.ReadWriteTimeout = timeout; req.Proxy = null;
                 using (var r = req.GetResponse()) using (var rd = new StreamReader(r.GetResponseStream())) return js.Deserialize<Dictionary<string, object>>(rd.ReadToEnd());
             }
+            catch (WebException e) { if (e.Response == null && timeout <= 1500) mixerDownUntil = DateTime.UtcNow.AddSeconds(5); return null; }
             catch { return null; }
         }
+        static DateTime mixerDownUntil;
         static Dictionary<string, object> HubRecent()
         {
             try
             {
-                if (Process.GetProcessesByName("HallowHub").Length == 0) return null;
-                var f = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"HallowHub\recent.json");
+                if (RemoteSettings.TestDir == null && Process.GetProcessesByName("HallowHub").Length == 0) return null;
+                var f = Path.Combine(Family.DataDir("Hub"), "recent.json");
                 return File.Exists(f) ? js.Deserialize<Dictionary<string, object>>(File.ReadAllText(f)) : null;
             }
             catch { return null; }
         }
-        static string ToolkitScript { get { var p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), @"HallowToolkit\HallowToolkit.ps1"); return File.Exists(p) ? p : null; } }
+        static string ToolkitDir { get { return RemoteSettings.TestDir != null ? Path.Combine(RemoteSettings.TestDir, "HallowToolkit") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "HallowToolkit"); } }
+        static string ToolkitScript { get { var p = Path.Combine(ToolkitDir, "HallowToolkit.ps1"); return File.Exists(p) ? p : null; } }
         // only the GameSession part of Hallow Toolkit's settings is read (the file also holds things like a Discord link, which never leave the PC)
         static bool? SessionOn()
         {
             try
             {
-                var f = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), @"HallowToolkit\settings.json");
+                var f = Path.Combine(ToolkitDir, "settings.json");
                 if (ToolkitScript == null || !File.Exists(f)) return null;
                 var d = js.Deserialize<Dictionary<string, object>>(File.ReadAllText(f)); object g;
                 return d.TryGetValue("GameSession", out g) && g is Dictionary<string, object> && ((Dictionary<string, object>)g).ContainsKey("Started");
             }
             catch { return null; }
+        }
+
+        // ---- v1.2: Hallow Clips, Vault and Overlay, through their family pipes. Only what the phone needs is passed on.
+        static object Get(Dictionary<string, object> d, string k) { object v; return d != null && d.TryGetValue(k, out v) ? v : null; }
+        static System.Collections.ArrayList List(Dictionary<string, object> d, string k) { return Get(d, k) as System.Collections.ArrayList ?? new System.Collections.ArrayList(); }
+        static double Num(object o) { try { return o == null ? 0 : Convert.ToDouble(o, System.Globalization.CultureInfo.InvariantCulture); } catch { return 0; } }
+        // "Today 20:01", "Yesterday 20:01", "Nov 17, 20:01"
+        static string When(object iso)
+        {
+            DateTime t; var s = iso as string;
+            if (s == null || !DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out t)) return null;
+            var days = (DateTime.Today - t.Date).TotalDays;
+            return (days < 1 ? "Today" : days < 2 ? "Yesterday" : t.ToString("MMM d,", System.Globalization.CultureInfo.InvariantCulture)) + " " + t.ToString("HH:mm");
+        }
+        // a clip's id: a short hash of its file path, so the phone never sends a path
+        static string ClipId(string file) { using (var h = SHA1.Create()) return BitConverter.ToString(h.ComputeHash(Encoding.UTF8.GetBytes(file.ToLowerInvariant()))).Replace("-", "").Substring(0, 16).ToLowerInvariant(); }
+        static string ClipPath(Dictionary<string, object> status, Dictionary<string, object> clip, string key)
+        {
+            var f = Get(clip, key) as string; if (string.IsNullOrEmpty(f)) return null;
+            try { if (!Path.IsPathRooted(f)) { var dir = Get(status, "folder") as string; if (dir == null) return null; f = Path.Combine(dir, f); } return Path.GetFullPath(f); } catch { return null; }
+        }
+        // the mp4 (or its thumbnail) of the clip with this id - only if Hallow Clips lists it right now
+        static string ClipFile(string id, bool video)
+        {
+            var s = Family.Status("Clips"); if (s == null || id.Length != 16) return null;
+            foreach (var o in List(s, "clips"))
+            {
+                var c = o as Dictionary<string, object>; var f = ClipPath(s, c, "file"); if (f == null || ClipId(f) != id) continue;
+                var p = video ? f : ClipPath(s, c, "thumb");
+                if (p == null || !p.EndsWith(video ? ".mp4" : ".jpg", StringComparison.OrdinalIgnoreCase) || !File.Exists(p)) return null;
+                return p;
+            }
+            return null;
+        }
+        static Dictionary<string, object> Clips()
+        {
+            var s = Family.Status("Clips"); if (s == null) return null;
+            var items = new List<object>();
+            foreach (var o in List(s, "clips"))
+            {
+                var c = o as Dictionary<string, object>; var f = ClipPath(s, c, "file"); if (f == null || !f.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) || !File.Exists(f)) continue;
+                var th = ClipPath(s, c, "thumb");
+                items.Add(new Dictionary<string, object> { { "id", ClipId(f) }, { "game", Get(c, "game") as string }, { "when", When(Get(c, "time")) },
+                    { "sec", Math.Round(Num(Get(c, "durationSec"))) }, { "mb", Math.Round(Num(Get(c, "sizeBytes")) / 1048576.0) }, { "thumb", th != null && File.Exists(th) }, { "fav", Get(c, "favorite") is bool && (bool)Get(c, "favorite") } });
+                if (items.Count >= 12) break;
+            }
+            return new Dictionary<string, object> { { "recording", Get(s, "recording") is bool && (bool)Get(s, "recording") }, { "game", Get(s, "game") as string }, { "seconds", Num(Get(s, "seconds")) }, { "items", items } };
+        }
+        static Dictionary<string, object> Vault()
+        {
+            var s = Family.Status("Vault"); if (s == null) return null;
+            var games = new List<object>();
+            foreach (var o in List(s, "games"))
+            {
+                var g = o as Dictionary<string, object>; if (g == null || (Get(g, "off") is bool && (bool)Get(g, "off"))) continue;
+                games.Add(new Dictionary<string, object> { { "name", Get(g, "name") as string }, { "last", When(Get(g, "lastBackup")) }, { "versions", Num(Get(g, "versions")) } });
+            }
+            return new Dictionary<string, object> { { "busy", Get(s, "busy") is bool && (bool)Get(s, "busy") }, { "games", games } };
+        }
+        static Dictionary<string, object> Overlay()
+        {
+            var s = Family.Status("Overlay"); if (s == null) return null;
+            return new Dictionary<string, object> { { "visible", Get(s, "visible") is bool && (bool)Get(s, "visible") } };
         }
 
         string State()
@@ -250,6 +373,7 @@ namespace HallowRemote
                 { "mixer", Mixer("/state") },
                 { "hub", hub != null }, { "games", games },
                 { "session", SessionOn() },
+                { "clips", Clips() }, { "vault", Vault() }, { "overlay", Overlay() },
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return js.Serialize(o);
         }
@@ -287,9 +411,54 @@ namespace HallowRemote
                     Process.Start(new ProcessStartInfo("powershell.exe", "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + s + "\" -Mode " + (on ? "SessionEnd" : "SessionStart")) { UseShellExecute = false, CreateNoWindow = true });
                     msg = on ? "Ending the game session" : "Game session on"; break;
                 }
+                // v1.2: the other Hallow apps - fixed commands only, never text from the phone
+                case "clip":
+                {
+                    var r = Family.Send("Clips", "save", 20000);
+                    msg = Family.Error(r, "Hallow Clips isn't running") ?? "Clip saved"; break;
+                }
+                case "backup":
+                {
+                    var r = Family.Send("Vault", "backup all", 5000);
+                    msg = Family.Error(r, "Hallow Vault isn't running") ?? "Backing up your saves"; break;
+                }
+                case "overlay":
+                {
+                    string d; q.TryGetValue("do", out d); if (d != "show" && d != "hide") break;
+                    var r = Family.Send("Overlay", d, 5000);
+                    msg = Family.Error(r, "Hallow Overlay isn't running") ?? (d == "show" ? "Overlay shown" : "Overlay hidden"); break;
+                }
+                case "power":
+                {
+                    string d; q.TryGetValue("do", out d);
+                    if (d == "sleep" || d == "shutdown" || d == "lock") msg = Power(d);
+                    break;
+                }
             }
             if (msg != null && Log != null) Log(msg);
             return js.Serialize(new Dictionary<string, object> { { "ok", msg != null }, { "msg", msg ?? "Not allowed" } });
+        }
+
+        // v1.2: sleep, shut down or lock this PC (the phone asks for a second tap first). A moment later, so the phone gets its answer.
+        // HALLOW_REMOTE_DRYRUN=1 (or a test folder) only says what it would do.
+        [DllImport("user32.dll")] static extern bool LockWorkStation();
+        public static bool DryRun { get { return RemoteSettings.TestDir != null || Environment.GetEnvironmentVariable("HALLOW_REMOTE_DRYRUN") == "1"; } }
+        static string Power(string what)
+        {
+            var label = what == "sleep" ? "Going to sleep" : what == "shutdown" ? "Shutting down" : "Locking the PC";
+            if (DryRun) return label + " (test - not really)";
+            new Thread(() =>
+            {
+                Thread.Sleep(1000);
+                try
+                {
+                    if (what == "lock") LockWorkStation();
+                    else if (what == "sleep") System.Windows.Forms.Application.SetSuspendState(System.Windows.Forms.PowerState.Suspend, false, false);
+                    else Process.Start(new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "shutdown.exe"), "/s /t 0") { UseShellExecute = false, CreateNoWindow = true });
+                }
+                catch { }
+            }) { IsBackground = true }.Start();
+            return label;
         }
 
         // the header art of Hub's recent game i (Steam's cache on this PC)

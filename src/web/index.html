@@ -34,6 +34,15 @@ input[type=range]{flex:1;accent-color:var(--c,#f07820);height:28px}
 #toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#241e2e;border:1px solid #3a3248;border-radius:12px;padding:10px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
 #toast.show{opacity:1}
 .session{display:flex;align-items:center;justify-content:space-between}
+.clip{display:flex;gap:10px;align-items:center;width:100%;background:none;border:0;border-top:1px solid #2e2639;color:#ece8f4;padding:9px 0;text-align:left;font:inherit}
+.clip:first-of-type{border-top:0}.clip img,.clip .ni{width:96px;height:54px;border-radius:8px;object-fit:cover;background:#2a2333;flex:none}
+.clip b{display:block;font-size:14px}.clip small{color:#8f88a0;font-size:12px}
+.vg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #2e2639;font-size:14px}.vg:first-of-type{border-top:0}.vg span{color:#8f88a0;font-size:13px;text-align:right}
+.power{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.power .btn{padding:14px 6px}
+.btn:disabled{opacity:.55}
+#player{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:5}
+#player video{flex:1;width:100%;min-height:0;background:#000}
+#player .bar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#ece8f4}
 </style></head>
 <body>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
@@ -43,6 +52,11 @@ input[type=range]{flex:1;accent-color:var(--c,#f07820);height:28px}
 <div id="mixer"></div>
 <div id="games"></div>
 <div id="session"></div>
+<div id="clips"></div>
+<div id="vault"></div>
+<div id="overlay"></div>
+<h2>This PC</h2><div class="power"><button class="btn" id="pw_sleep" onclick="power('sleep')">Sleep</button><button class="btn" id="pw_shutdown" onclick="power('shutdown')">Shut down</button><button class="btn" id="pw_lock" onclick="power('lock')">Lock</button></div>
+<div id="player"><div class="bar"><b id="ptitle"></b><button class="btn" onclick="closePlayer()">Close</button></div><video id="video" controls playsinline preload="metadata"></video></div>
 <div id="toast"></div>
 <script>
 var base = location.pathname.replace(/\/?$/, '/'), dragging = {}, last = null, lastGames = '';
@@ -94,6 +108,47 @@ function render(s) {
   }
   el('session').innerHTML = s.session == null ? '' : '<h2>Hallow Toolkit</h2><div class="card session"><div><b>Game session</b><div class="sub">' + (s.session ? 'On - Boost apps closed, High performance power' : 'Off') + '</div></div>' +
     '<button class="btn ' + (s.session ? 'on' : 'go') + '" onclick="act(\'a=session\')">' + (s.session ? 'End' : 'Start') + '</button></div>';
+  // v1.2: Hallow Clips, Vault, Overlay - each card only while that app is running
+  var ck = JSON.stringify(s.clips);
+  if (ck !== lastClips) {
+    lastClips = ck; var c = s.clips, h = '';
+    if (c) {
+      h = '<h2>Hallow Clips</h2><div class="card"><div class="session"><div><b>' + (c.recording ? 'Recording' : 'Not recording') + '</b><div class="sub">' +
+        (c.recording ? esc([c.game, c.seconds ? 'last ' + c.seconds + ' s' : ''].filter(Boolean).join(' - ')) : 'Start a game, or turn recording on in Hallow Clips') + '</div></div>' +
+        '<button class="btn go" id="saveclip" onclick="saveClip()"' + (c.recording ? '' : ' disabled') + '>Save clip</button></div>';
+      if (c.items.length) h += '<div style="margin-top:8px">' + c.items.map(function (x) {
+        var t = esc([x.game, x.when].filter(Boolean).join(' - '));
+        return '<button class="clip" onclick="watch(\'' + x.id + '\',\'' + t.replace(/'/g, '') + '\')">' + (x.thumb ? '<img loading="lazy" src="' + base + 'api/thumb/' + x.id + '" alt="">' : '<div class="ni"></div>') +
+          '<div><b>' + (x.fav ? '&#9733; ' : '') + esc(x.game || 'Clip') + '</b><small>' + esc(x.when || '') + ' - ' + dur(x.sec) + ' - ' + (x.mb < 1 ? '&lt;1' : x.mb) + ' MB</small></div></button>';
+      }).join('') + '</div>';
+      else h += '<div class="sub" style="margin-top:10px">No clips yet.</div>';
+      h += '</div>';
+    }
+    el('clips').innerHTML = h;
+  }
+  var v = s.vault;
+  el('vault').innerHTML = !v ? '' : '<h2>Hallow Vault</h2><div class="card"><div class="session"><div><b>Game saves</b><div class="sub">' + (v.busy ? 'Backing up now...' : v.games.filter(function (g) { return g.last; }).length + ' of ' + v.games.length + ' games backed up') + '</div></div>' +
+    '<button class="btn go" onclick="act(\'a=backup\')"' + (v.busy ? ' disabled' : '') + '>' + (v.busy ? 'Backing up' : 'Back up now') + '</button></div>' +
+    (v.games.length ? '<div style="margin-top:8px">' + v.games.map(function (g) { return '<div class="vg"><b>' + esc(g.name) + '</b><span>' + (g.last ? esc(g.last) : 'Never') + '</span></div>'; }).join('') + '</div>' : '') + '</div>';
+  var o = s.overlay;
+  el('overlay').innerHTML = !o ? '' : '<h2>Hallow Overlay</h2><div class="card session"><div><b>Overlay</b><div class="sub">' + (o.visible ? 'On screen' : 'Hidden') + '</div></div>' +
+    '<button class="btn ' + (o.visible ? '' : 'go') + '" onclick="act(\'a=overlay&do=' + (o.visible ? 'hide' : 'show') + '\')">' + (o.visible ? 'Hide' : 'Show') + '</button></div>';
+}
+var lastClips = '';
+function dur(sec) { sec = Math.round(sec || 0); return Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2); }
+function saveClip() { var b = el('saveclip'); if (b) { b.disabled = true; b.textContent = 'Saving...'; } act('a=clip').then(function () { lastClips = ''; load(); }); }
+function watch(id, title) { el('ptitle').textContent = title; var v = el('video'); v.src = base + 'api/clip/' + id; el('player').style.display = 'flex'; v.play().catch(function () {}); }
+function closePlayer() { var v = el('video'); v.pause(); v.removeAttribute('src'); v.load(); el('player').style.display = 'none'; }
+// sleep / shut down / lock: the first tap arms the button, a second tap within 4 s does it
+var armed = {}, powerText = { sleep: 'Sleep', shutdown: 'Shut down', lock: 'Lock' };
+function power(what) {
+  var b = el('pw_' + what);
+  if (!armed[what]) {
+    armed[what] = setTimeout(function () { armed[what] = 0; b.className = 'btn'; b.textContent = powerText[what]; }, 4000);
+    b.className = 'btn on'; b.textContent = 'Tap again'; return;
+  }
+  clearTimeout(armed[what]); armed[what] = 0; b.className = 'btn'; b.textContent = powerText[what];
+  act('a=power&do=' + what);
 }
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {

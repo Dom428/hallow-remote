@@ -6,14 +6,9 @@
 |---|---|
 | **1.0** | Phone remote over Tailscale or home Wi-Fi with a secret link and QR code: Hallow Mixer sliders, mic, presets and music; Hallow Hub games (tap to play); Hallow Toolkit game session; PC stats; New link retires the old one |
 | **1.1** | QR code checked against the QR standard (format bits, Reed-Solomon, version choice) and given the lowest-penalty mask; Home Wi-Fi mode skips VPN / WSL / Hyper-V adapters and prefers the one with your router |
+| **1.2** | Hallow Clips (save a clip, newest clips, watch them on the phone with seeking), Hallow Vault (back up now, last backup per game), Hallow Overlay (show / hide), sleep / shut down / lock with a confirm tap; Remote's own family pipe (ping, status) and `--cmd` |
 
 ## Next
-
-### 1.2 - More of the family on the phone
-- Hallow Clips: Save clip, newest clips (watch on the phone)
-- Hallow Vault: Back up now, last backup per game
-- Hallow Overlay: show / hide
-- Sleep, shutdown and lock the PC (with a confirm tap)
 
 ### 1.3 - Proper app feel
 - HTTPS through Tailscale's own certificates, so the phone treats it as a real app

@@ -1,4 +1,4 @@
-﻿// Hallow Remote - your phone as a remote for the Hallow apps: Mixer sliders and mic, Hub games, Toolkit game session, PC stats.
+﻿// Hallow Remote - your phone as a remote for the Hallow apps: Mixer sliders and mic, Hub games, Clips, Vault, Overlay, Toolkit game session, PC stats and power.
 // The PC side is this small tray app; the phone side is a web page you add to your home screen.
 using System;
 using System.Linq;
@@ -19,17 +19,19 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.1";
+        public const string Version = "1.2";
         [STAThread]
         public static void Main(string[] args)
         {
+            int ci = Array.IndexOf(args, "--cmd");   // v1.2: send a line to the running copy (Hallow family link)
+            if (ci >= 0) { Environment.Exit(Family.RunCmd(ci + 1 < args.Length ? args[ci + 1] : "")); return; }
             int si = Array.IndexOf(args, "--snap");
             if (si >= 0 && si + 1 < args.Length)
             {
@@ -83,7 +85,7 @@ namespace HallowRemote
                 else Quit();
             };
             server.Log = m => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  From your phone: " + m));
-            if (!Snap.On) { server.Start(); SetupTray(); }
+            if (!Snap.On) { server.Start(); SetupTray(); Family.Serve("Remote", server.Command); }
             else { server.Address = "100.90.88.26"; }
             ShowLink();
             if (!Snap.On)
@@ -116,7 +118,7 @@ namespace HallowRemote
             qrBox.Child = qr; DockPanel.SetDock(qrBox, Dock.Left); row.Children.Add(qrBox);
             var info = new StackPanel();
             info.Children.Add(new TextBlock { Text = "Scan this with your phone's camera", FontSize = 16, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
-            info.Children.Add(new TextBlock { Text = "Then use your browser's \"Add to Home screen\" so it opens like an app. You get Hallow Mixer's sliders and mic, your Hallow Hub games, the Hallow Toolkit game session and your PC's stats.",
+            info.Children.Add(new TextBlock { Text = "Then use your browser's \"Add to Home screen\" so it opens like an app. You get Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, your PC's stats and sleep / shut down / lock.",
                 Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
             link = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = B("#ECE8F4"), Margin = new Thickness(0, 0, 0, 10) };
             info.Children.Add(link);
