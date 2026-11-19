@@ -14,6 +14,34 @@
 
 ## Next
 
+### Gaps vs Unified Remote
+What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow Remote doesn't (yet):
+- Mouse trackpad and keyboard from the phone - **buildable** (SendInput on the PC; opt-in) -> 1.7
+- Updates itself - **buildable** (GitHub releases with checksum, like Hallow Hub) -> 1.7
+- Media keys, PC volume and now playing without Hallow Mixer - **buildable** (media keys, Windows Core Audio, Windows' media sessions) -> 1.8
+- Open an app on the PC from the phone - **buildable** (a list set up on the PC only; the phone can't add commands) -> 1.8
+- Send text to the PC clipboard - **buildable** (opt-in) -> 1.9
+- Screen viewer - **buildable as a one-shot screen peek** (opt-in, off by default, the PC says each time) -> 1.9; a live screen stream is not planned (bandwidth and privacy)
+- Presentation remote - **buildable** (arrow keys on the keyboard page) -> 1.7
+- App-specific remotes (90+ in Unified Remote) - **partly**: My buttons covers fixed actions; per-app remotes would need an action for each app - later
+- File transfer phone <-> PC - **buildable** later (upload into Downloads), not in this round
+- Wake-on-LAN - **not buildable here**: a sleeping or off PC can't run Remote; it needs another always-on device on the network
+- Phone notifications on the PC, SMS, ring my phone, phone battery - **not buildable**: a web page can't read the phone's notifications, texts or battery; it needs a native phone app
+- Widgets, voice control, Siri, NFC, smartwatch - **not buildable**: native phone app features
+- Streaming games with touch controls (Steam Link) - **not buildable** sensibly: needs a low-latency video encoder and stream; Steam Link already does it
+- Works on networks that block device-to-device traffic (KDE Connect over OpenVPN) - **already covered** by Tailscale
+
+### 1.7 - Updates and trackpad
+- Updates from GitHub inside the app (asks first, checks the download's SHA-256)
+- Trackpad and keyboard from the phone (off by default, its own switch on the PC, never while paused)
+
+### 1.8 - Media and apps
+- Media keys, PC volume and now playing without Hallow Mixer
+- Open an app on the PC from a list you set up on the PC
+
+### 1.9 - Clipboard and screen peek
+- Send text from the phone to the PC clipboard (opt-in)
+- Screen peek: a one-shot screenshot, opt-in and off by default
 ### Still to check by hand
 - Live stats with a real Hallow Overlay: Overlay 1.8 shares its last match but not live FPS / ping / server in its status yet, so those tiles appear once it does
 - One Hallow icon with the real Hallow Hub 2.4 (tested against a fake Hub pipe)
