@@ -14,11 +14,9 @@
 | **1.7** | Updates from GitHub (asks first, SHA-256 checked, numeric version compare); trackpad, clicks, drag, scroll, typing and a fixed set of keys on the phone (SendInput) - off by default, its own switch with a warning, never while paused |
 | **1.8** | Media keys, PC volume and mute (Core Audio) and now playing (Windows media sessions) without Hallow Mixer; apps to open from a list set up on the PC only (phone sees names and random ids, never paths); both in My buttons |
 | **1.9** | Text from the phone onto the PC clipboard (opt-in, up to 2000 characters); Screen peek: one JPEG of the main screen per tap (opt-in, off by default, at most one every 2 s, announced on the PC each time); both stop while paused |
+| **1.10** | Keys tab: Hallow Keys' phone copy served only over HTTPS (403 otherwise), decrypted on the phone with WebCrypto (PBKDF2-SHA256 + AES-GCM), view and copy only, TOTP codes, locks after 2 minutes or when the page is hidden; a service worker keeps the page and the encrypted copy for offline use |
 
 ## Next
-
-### 1.10 - Hallow Keys on the phone
-- A Keys tab: Hallow Keys' encrypted phone copy, opened on the phone with WebCrypto (needs HTTPS), view and copy only
 
 ### Gaps vs Unified Remote
 What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow Remote doesn't (yet):

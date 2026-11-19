@@ -13,6 +13,7 @@ Your phone as a remote for the Hallow apps - [Hallow Mixer](https://github.com/D
 - **My buttons:** your own grid of the actions above
 - **Media and apps:** PC volume and mute, what's playing and play / pause / skip (any player), and apps to open from a list you set up on the PC
 - **Clipboard and screen peek:** send text to the PC clipboard; take one picture of the screen when you ask (both opt-in)
+- **Keys:** a read-only copy of your Hallow Keys vault (HTTPS only; decrypted on the phone)
 - **Mouse:** trackpad, clicks, scrolling, typing and arrow keys (also a presentation clicker) - off until you turn it on in the PC window
 
 The PC side is a small tray app that serves a phone web page (add it to your home screen) on your Tailscale or home-network address. Every request needs the secret code in the link; the phone can only do a fixed list of things (and only play clips Hallow Clips lists), and secrets on the PC (like app keys or a Discord link) are never sent. Scan the QR code it shows - it's made on the PC, never by an online service.
@@ -21,6 +22,7 @@ The PC side is a small tray app that serves a phone web page (add it to your hom
 
 ## What's new
 
+- **1.10** - A Keys tab for [Hallow Keys](https://github.com/Dom428/hallow-keys): its read-only phone copy, opened on your phone with your master password (decrypted on the phone with WebCrypto - needs HTTPS). The page and the encrypted copy also open without a connection.
 - **1.9** - Send text from the phone to the PC clipboard, and Screen peek: one picture of the PC's main screen when you tap. Both are off until you turn them on in the PC window; the PC tells you each time the screen is peeked.
 - **1.8** - Media without Hallow Mixer: play / pause / skip with the media keys, what's playing on the PC (Windows' own media info), and the PC's volume and mute. Open an app on the PC from a list you set up in the PC window (the phone only sees the names).
 - **1.7** - Updates itself from GitHub (asks first, checks the download's SHA-256). Trackpad and keyboard on the phone's Mouse page - off by default, behind its own switch on the PC, never while the remote is paused.

@@ -233,6 +233,13 @@ namespace HallowRemote
                     "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
                 else if (rest == "/api/do") { var res = Do(q); Changed(); Send(st, 200, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest == "/api/keys")   // v1.10: Hallow Keys' encrypted phone copy - only over HTTPS (the phone needs it for WebCrypto anyway)
+                {
+                    var kf = Path.Combine(Family.DataDir("Keys"), "phone.bin");
+                    if (cert == null || !File.Exists(kf)) Send(st, 403, "application/json", Encoding.UTF8.GetBytes("{\"ok\":false}"));
+                    else Send(st, 200, "application/json", File.ReadAllBytes(kf));
+                }
+                else if (rest == "/sw.js") Send(st, 200, "text/javascript", Resource("sw.js"));
                 else if (rest == "/api/peek")   // v1.9: one screenshot, only while the switch on the PC is on
                 {
                     var img = Peek();
@@ -461,6 +468,14 @@ namespace HallowRemote
             catch (Exception e) { return "Couldn't open " + l.Name + ": " + e.Message; }
         }
         static bool Power_DryRun() { return DryRun; }
+        // v1.10: is there a phone copy from Hallow Keys, and can the phone open it (HTTPS)?
+        Dictionary<string, object> KeysState()
+        {
+            var kf = Path.Combine(Family.DataDir("Keys"), "phone.bin"); bool has = File.Exists(kf);
+            if (!has && !Directory.Exists(Family.DataDir("Keys"))) return null;   // Hallow Keys isn't installed / used
+            DateTime made = DateTime.MinValue; try { if (has) made = File.GetLastWriteTime(kf); } catch { }
+            return new Dictionary<string, object> { { "copy", has }, { "https", cert != null }, { "made", has ? When(made.ToString("s")) : null } };
+        }
 
         // ---- v1.9: clipboard and screen peek (both off by default; the window sets SetClipboard and Peeked)
         public Func<string, bool> SetClipboard;
@@ -606,6 +621,7 @@ namespace HallowRemote
                 { "sys", SysMedia() },   // v1.8: PC volume and what's playing, without Hallow Mixer
                 { "apps", AppsJson() },  // v1.8: names only (never paths)
                 { "clipboard", S.AllowClipboard && !Paused }, { "peek", S.AllowPeek && !Paused },   // v1.9
+                { "keys", KeysState() },   // v1.10
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;

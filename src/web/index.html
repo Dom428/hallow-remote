@@ -56,7 +56,8 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 </style></head>
 <body>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
-<div class="tabs"><button id="t_home" class="on" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button></div>
+<div class="tabs"><button id="t_home" class="on" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button></div>
+<div id="v_keys" style="display:none"></div>
 <div id="v_pad" style="display:none"><div id="padoff" class="card off" style="display:none">The mouse and keyboard are off. Turn on <b>Let your phone use the mouse and keyboard</b> in Hallow Remote on your PC.</div>
 <div id="padon"><div id="pad">Drag to move - tap to click<br>two fingers: tap = right click, drag = scroll</div>
 <div class="row3"><button class="btn" ontouchstart="btnHold('left',event)" ontouchend="btnRelease('left',event)" onmousedown="btnHold('left',event)" onmouseup="btnRelease('left',event)">Left</button><button class="btn" onclick="inp('k=button&b=middle')">Middle</button><button class="btn" onclick="inp('k=button&b=right')">Right</button></div>
@@ -96,6 +97,7 @@ var timers = {};
 function slide(ch, v) { el('p_' + ch).textContent = v + '%'; clearTimeout(timers[ch]); timers[ch] = setTimeout(function () { act('a=set&ch=' + ch + '&v=' + v, true); }, 150); }
 function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cls || '') + '">' + (v < 0 ? '-' : v + unit) + '</b><small>' + label + '</small></div>'; }
 function render(s) {
+  el('t_keys').style.display = s.keys ? '' : 'none'; var kk = JSON.stringify(s.keys); if (kk !== lastKeysState) { lastKeysState = kk; if (view == 'keys') renderKeys(s); }
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
   if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s);
   if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
@@ -194,9 +196,10 @@ function power(what) {
 // ---- v1.6: tabs, Live stats, My buttons
 var view = 'home', editing = false, catalog = [], mine = [];
 function tab(v) {
-  view = v; ['home', 'live', 'mine', 'pad'].forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
+  view = v; ['home', 'live', 'mine', 'pad', 'keys'].forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
   if (v == 'mine' && !catalog.length) loadButtons();
   if (last) render(last);
+  if (v == 'keys' && last) renderKeys(last);
   if (!polling) { rev = 0; live(); }   // the live stats page asks every second
 }
 function renderLive(s) {
@@ -307,6 +310,91 @@ function peek() {
     .catch(function (e) { toast(typeof e == 'string' ? e : 'Your PC didn\'t answer'); })
     .then(function () { b.disabled = false; b.textContent = 'Peek again'; });
 }
+// ---- v1.10: Hallow Keys on the phone - a read-only copy, decrypted here with WebCrypto (your master password never leaves the phone)
+async function hkOpen(blob, password) {
+  const enc = new TextEncoder(); const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  if (!blob || blob.v !== 1 || blob.kdf !== 'PBKDF2-SHA256' || !(blob.iter >= 600000)) throw new Error('unsupported');
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(blob.salt), iterations: blob.iter }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(blob.iv), additionalData: enc.encode(blob.aad), tagLength: 128 }, key, b64(blob.ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+var lastKeysState = '', hk = null, hkTimer = 0, hkQuery = '', hkSel = -1;
+function hkTouch() { clearTimeout(hkTimer); hkTimer = setTimeout(function () { hkLock('Locked after 2 minutes.'); }, 120000); }
+function hkLock(msg) { hk = null; hkSel = -1; clearTimeout(hkTimer); if (view === 'keys' && last) renderKeys(last, msg); }
+document.addEventListener('visibilitychange', function () { if (document.hidden && hk) hkLock('Locked when you left the page.'); });
+function renderKeys(s, msg) {
+  var k = s.keys, box = el('v_keys');
+  if (!k) { box.innerHTML = '<div class="card off">Hallow Keys isn\'t set up on your PC.</div>'; return; }
+  if (!window.isSecureContext || !window.crypto || !crypto.subtle || !k.https) {
+    box.innerHTML = '<div class="card"><b>Your passwords need HTTPS</b><div class="sub" style="margin-top:6px">The phone opens Hallow Keys\' copy with your master password, right here - which browsers only allow on an https page. ' +
+      'In Hallow Remote on your PC, follow <b>Turn on HTTPS</b> (two steps in Tailscale), then scan the new code and open the https link.</div></div>'; return;
+  }
+  if (!k.copy) { box.innerHTML = '<div class="card"><b>Phone copy is off</b><div class="sub" style="margin-top:6px">In Hallow Keys on your PC: Settings &gt; App &gt; turn on <b>Phone copy for Hallow Remote</b>.</div></div>'; return; }
+  if (!hk) {
+    box.innerHTML = '<div class="card"><b>Hallow Keys</b><div class="sub" style="margin:4px 0 10px">A read-only copy' + (k.made ? ' from ' + esc(k.made) : '') + '. Your master password stays on this phone.</div>' +
+      '<input id="hkpw" type="password" autocomplete="current-password" placeholder="Master password" style="width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:11px;font:inherit">' +
+      '<button class="btn go" style="width:100%;margin-top:10px" id="hkgo" onclick="hkUnlock()">Unlock</button><div class="sub" id="hkmsg" style="margin-top:8px">' + esc(msg || '') + '</div></div>';
+    el('hkpw').addEventListener('keydown', function (e) { if (e.key === 'Enter') hkUnlock(); });
+    return;
+  }
+  hkTouch();
+  var items = hk.items.filter(function (i) { var q = hkQuery.toLowerCase(); return !q || [i.title, i.user, i.folder, (i.urls || []).join(' ')].join(' ').toLowerCase().indexOf(q) >= 0; })
+    .sort(function (a, b) { return (b.fav - a.fav) || a.title.localeCompare(b.title); });
+  var h = '<div class="ed"><input id="hkq" placeholder="Search" value="' + esc(hkQuery) + '" oninput="hkQuery=this.value;renderKeys(last)"><button class="btn" onclick="hkLock(\'Locked.\')">Lock</button></div>';
+  if (hkSel >= 0 && hk.items[hkSel]) h += hkDetail(hk.items[hkSel]);
+  else h += '<div class="card">' + (items.length ? items.map(function (i) { return '<button class="clip" onclick="hkSel=' + hk.items.indexOf(i) + ';renderKeys(last)"><div><b>' + (i.fav ? '&#9733; ' : '') + esc(i.title) + '</b><small>' + esc(i.user || i.folder || i.type) + '</small></div></button>'; }).join('') : '<div class="sub">Nothing matches.</div>') + '</div>';
+  box.innerHTML = h;
+  var q = el('hkq'); if (q && document.activeElement !== q && hkSel < 0 && hkQuery) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+}
+function hkRow(label, value, secret) {
+  if (!value) return '';
+  var id = 'hk' + Math.random().toString(36).slice(2);
+  hkVals[id] = value;
+  return '<div style="margin:10px 0"><div class="sub">' + label + '</div><div class="ed" style="margin:2px 0"><span id="' + id + '" style="flex:1;word-break:break-all;font-size:15px">' + (secret ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(value)) + '</span>' +
+    (secret ? '<button class="btn" onclick="hkShow(\'' + id + '\',this)">Show</button>' : '') + '<button class="btn" onclick="hkCopy(\'' + id + '\')">Copy</button></div></div>';
+}
+var hkVals = {};
+function hkShow(id, b) { var sp = el(id), shown = b.textContent === 'Hide'; sp.innerHTML = shown ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(hkVals[id]); b.textContent = shown ? 'Show' : 'Hide'; hkTouch(); }
+function hkCopy(id) { navigator.clipboard.writeText(hkVals[id]).then(function () { toast('Copied'); }, function () { toast('Couldn\'t copy'); }); hkTouch(); }
+function hkDetail(i) {
+  hkVals = {};
+  var h = '<div class="card"><button class="btn" onclick="hkSel=-1;renderKeys(last)">&#8592; All items</button><h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:#ece8f4;letter-spacing:0">' + esc(i.title) + '</h2>';
+  h += hkRow('Username', i.user) + hkRow('Password', i.pw, true) + (i.totp ? '<div style="margin:10px 0"><div class="sub">2FA code</div><div class="ed" style="margin:2px 0"><span id="hktotp" style="flex:1;font-size:20px;font-weight:700">...</span><button class="btn" onclick="hkCopyTotp()">Copy</button></div></div>' : '');
+  (i.urls || []).forEach(function (u) { h += hkRow('Website', u); });
+  h += hkRow('Name on card', i.cardHolder) + hkRow('Card number', i.cardNumber, true) + hkRow('Expiry', i.expiry) + hkRow('Security code', i.cvc, true) + hkRow('PIN', i.pin, true);
+  h += hkRow('Name', i.name) + hkRow('Email', i.email) + hkRow('Phone', i.phone) + hkRow('Address', i.address) + hkRow(i.type === 'note' ? 'Note' : 'Notes', i.notes);
+  h += '</div>';
+  if (i.totp) setTimeout(function () { hkTotpTick(i.totp); }, 0);
+  return h;
+}
+// RFC 6238 with WebCrypto HMAC
+function hkB32(s) { var a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567', bits = 0, v = 0, out = []; s = s.toUpperCase().replace(/[\s=-]/g, ''); for (var c of s) { var x = a.indexOf(c); if (x < 0) return null; v = (v << 5) | x; bits += 5; if (bits >= 8) { out.push((v >>> (bits - 8)) & 255); bits -= 8; } } return new Uint8Array(out); }
+function hkTotpSpec(t) {
+  var spec = { alg: 'SHA-1', digits: 6, period: 30, secret: null };
+  if (/^otpauth:/i.test(t)) { try { var u = new URL(t); spec.secret = hkB32(u.searchParams.get('secret') || ''); var al = (u.searchParams.get('algorithm') || 'SHA1').toUpperCase(); spec.alg = al === 'SHA256' ? 'SHA-256' : al === 'SHA512' ? 'SHA-512' : 'SHA-1'; spec.digits = +(u.searchParams.get('digits') || 6); spec.period = +(u.searchParams.get('period') || 30); } catch (e) { } }
+  else spec.secret = hkB32(t);
+  return spec.secret && spec.secret.length ? spec : null;
+}
+async function hkTotp(t, now) {
+  var s = hkTotpSpec(t); if (!s) return null;
+  var ctr = Math.floor(now / 1000 / s.period), msg = new Uint8Array(8); for (var i = 7; i >= 0; i--) { msg[i] = ctr & 255; ctr = Math.floor(ctr / 256); }
+  var k = await crypto.subtle.importKey('raw', s.secret, { name: 'HMAC', hash: s.alg }, false, ['sign']);
+  var h = new Uint8Array(await crypto.subtle.sign('HMAC', k, msg)), o = h[h.length - 1] & 15;
+  var bin = ((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3];
+  return String(bin % Math.pow(10, s.digits)).padStart(s.digits, '0');
+}
+var hkTotpNow = '';
+async function hkTotpTick(t) { var e = el('hktotp'); if (!e || !hk) return; hkTotpNow = await hkTotp(t, Date.now()); e.textContent = hkTotpNow || '-'; setTimeout(function () { hkTotpTick(t); }, 1000); }
+function hkCopyTotp() { if (hkTotpNow) navigator.clipboard.writeText(hkTotpNow).then(function () { toast('Copied'); }); hkTouch(); }
+function hkUnlock() {
+  var pw = el('hkpw').value; if (!pw) return; el('hkgo').disabled = true; el('hkmsg').textContent = 'Unlocking...';
+  fetch(base + 'api/keys', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw 'nocopy'; return r.json(); })
+    .then(function (blob) { return hkOpen(blob, pw); })
+    .then(function (d) { pw = null; hk = d; hkSel = -1; hkQuery = ''; renderKeys(last); })
+    .catch(function (e) { pw = null; var m = el('hkmsg'); if (m) m.textContent = e === 'nocopy' ? 'Couldn\'t get the copy from your PC.' : 'Wrong master password (or an old copy - unlock Hallow Keys on the PC once).'; var g = el('hkgo'); if (g) g.disabled = false; });
+}
+if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () { });
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })
