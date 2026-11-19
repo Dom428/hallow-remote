@@ -11,6 +11,7 @@
 | **1.4** | One Hallow icon: pipe `open` / `menu` (Show the phone code, Copy link, Pause the remote) / `invoke` / `quit`; "Use the Hallow icon" (default on) hides Remote's tray icon while Hub answers `tray-host` on:true and shows it again otherwise; balloons through Hub `notify`; the link and code never cross the pipe |
 | **1.5** | The Hallow accent from Hallow Toolkit (theme.json, watched live) on the PC window and the phone page (`--accent` CSS variable from the state); crash reports kept on this PC with a once-per-crash notice and `lastCrash` in status |
 | **1.6** | Live stats page (FPS / ping / server region and last match from Hallow Overlay's status when it reports them, otherwise Remote's PC stats; 1 s refresh while open); My buttons: a grid built only from the fixed action list (choose, order, rename), saved in remote.json, power keeps its confirm tap |
+| **1.7** | Updates from GitHub (asks first, SHA-256 checked, numeric version compare); trackpad, clicks, drag, scroll, typing and a fixed set of keys on the phone (SendInput) - off by default, its own switch with a warning, never while paused |
 
 ## Next
 
@@ -30,10 +31,6 @@ What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow 
 - Widgets, voice control, Siri, NFC, smartwatch - **not buildable**: native phone app features
 - Streaming games with touch controls (Steam Link) - **not buildable** sensibly: needs a low-latency video encoder and stream; Steam Link already does it
 - Works on networks that block device-to-device traffic (KDE Connect over OpenVPN) - **already covered** by Tailscale
-
-### 1.7 - Updates and trackpad
-- Updates from GitHub inside the app (asks first, checks the download's SHA-256)
-- Trackpad and keyboard from the phone (off by default, its own switch on the PC, never while paused)
 
 ### 1.8 - Media and apps
 - Media keys, PC volume and now playing without Hallow Mixer

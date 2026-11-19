@@ -33,7 +33,9 @@ namespace HallowRemote
         [DataMember] public bool UseHallowAccent = true;   // v1.5: the colour picked in Hallow Toolkit
         [DataMember] public string LastCrashShown = "";    // v1.5: the crash report the notice was last shown for (a file name)
         [DataMember] public List<MyButton> Buttons = new List<MyButton>();   // v1.6: the phone's "My buttons" (only ids from the fixed action list)
-        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); }
+        [DataMember] public bool AllowInput = false;       // v1.7: the phone may move the mouse and type (off by default)
+        [DataMember] public string LastUpdateCheck = "";   // v1.7
+        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
         [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
@@ -220,6 +222,7 @@ namespace HallowRemote
                     "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
                 else if (rest == "/api/do") { var res = Do(q); Changed(); Send(st, 200, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest == "/api/input") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(InputCmd(q)));
                 else if (rest == "/api/buttons") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Buttons(q)));
                 else if (rest == "/api/wait") { client.SendTimeout = 10000; Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Wait(q))); }
                 else if (rest.StartsWith("/api/cover/")) { int i; var img = int.TryParse(rest.Substring(11), out i) ? Cover(i) : null; if (img != null) Send(st, 200, "image/jpeg", img, true); else Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("No cover")); }
@@ -425,6 +428,25 @@ namespace HallowRemote
             return o;
         }
 
+        // ---- v1.7: trackpad and keyboard - only while the switch on the PC is on (off by default) and the remote isn't paused
+        string InputCmd(Dictionary<string, string> q)
+        {
+            Func<bool, string, string> res = (ok, m) => js.Serialize(new Dictionary<string, object> { { "ok", ok }, { "msg", m } });
+            if (!S.AllowInput || Paused) return res(false, "The mouse and keyboard are off - turn them on in Hallow Remote on your PC");
+            string k; q.TryGetValue("k", out k);
+            Func<string, int> num = n => { int v; string s; return q.TryGetValue(n, out s) && int.TryParse(s, out v) ? v : 0; };
+            string b, s2, t, name;
+            switch (k)
+            {
+                case "move": Input.Move(num("dx"), num("dy")); return res(true, null);
+                case "button": q.TryGetValue("b", out b); q.TryGetValue("s", out s2); return Input.Button(b, s2 ?? "click") ? res(true, null) : res(false, "Not allowed");
+                case "scroll": Input.Scroll(num("dy"), num("dx")); return res(true, null);
+                case "text": q.TryGetValue("t", out t); if (string.IsNullOrEmpty(t) || t.Length > 500) return res(false, "Too long"); Input.Text(t); return res(true, null);
+                case "key": q.TryGetValue("name", out name); return Input.Key(name) ? res(true, null) : res(false, "Not allowed");
+            }
+            return res(false, "Not allowed");
+        }
+
         // ---- v1.6: My buttons - your own grid, made only from the fixed actions below (choose, order, rename; nothing new)
         static readonly string[] ChannelNames = { "game", "chat", "music", "media", "other" };
         public List<Dictionary<string, object>> Catalog()
@@ -503,6 +525,7 @@ namespace HallowRemote
                 { "session", SessionOn() },
                 { "clips", Clips() }, { "vault", Vault() }, { "overlay", Overlay() },
                 { "buttons", MineJson() },   // v1.6
+                { "input", S.AllowInput && !Paused },   // v1.7
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;

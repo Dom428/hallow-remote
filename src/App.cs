@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.6.0.0")]
-[assembly: AssemblyFileVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyFileVersion("1.7.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.6";
+        public const string Version = "1.7";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -107,6 +107,13 @@ namespace HallowRemote
                 var host = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; host.Tick += (s, e) => CheckHost(); host.Start(); CheckHost();
                 // v1.5: the Hallow accent, live (the folder may only appear later, when Hallow Toolkit first saves a colour)
                 accentWatch = Accent.Watch(() => Dispatcher.BeginInvoke(new Action(ApplyAccent)));
+                // v1.7: look for a newer version 20 s after start and then every 6 hours (at most once a day); never in a test folder unless a stand-in is set
+                if (RemoteSettings.TestDir == null || Environment.GetEnvironmentVariable("HALLOW_REMOTE_API") != null)
+                {
+                    var upd = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+                    upd.Tick += (s, e) => { upd.Interval = TimeSpan.FromHours(6); DateTime last; if (!DateTime.TryParse(S.LastUpdateCheck, out last) || (DateTime.Now - last).TotalHours >= 24 || RemoteSettings.TestDir != null) CheckForUpdate(false); };
+                    upd.Start();
+                }
                 retry.Tick += (s, e) => { if (accentWatch == null) { accentWatch = Accent.Watch(() => Dispatcher.BeginInvoke(new Action(ApplyAccent))); if (accentWatch != null) ApplyAccent(); } };
                 Loaded += (s, e) => ShowCrashNotice();
                 if (startHidden) Dispatcher.BeginInvoke(new Action(ShowCrashNotice), DispatcherPriority.ApplicationIdle);
@@ -129,6 +136,11 @@ namespace HallowRemote
             try { title.Children.Add(new Image { Source = AppIcon(), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) }); } catch { }
             title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentHex), VerticalAlignment = VerticalAlignment.Center });
             title.Children.Add(new TextBlock { Text = " REMOTE", FontSize = 22, FontWeight = FontWeights.Light, VerticalAlignment = VerticalAlignment.Center });
+            // v1.7: "Update to vX" appears here when GitHub has a newer Hallow Remote
+            updateBtn = new Button { Style = (Style)FindResource("Accent"), Visibility = pending != null ? Visibility.Visible : Visibility.Collapsed, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            if (pending != null) updateBtn.Content = "Update to v" + pending.Version.ToString(2);
+            updateBtn.Click += (s, e) => InstallUpdate();
+            title.Children.Add(updateBtn);
             sp.Children.Add(title);
             var row = new DockPanel();
             var qrBox = new Border { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(12), Width = 214, Height = 214, Margin = new Thickness(0, 0, 20, 0), VerticalAlignment = VerticalAlignment.Top };
@@ -151,7 +163,8 @@ namespace HallowRemote
                 if (MessageBox.Show(this, "Make a new link? The old one stops working right away, so you'll scan the new code on your phone.", "Hallow Remote", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
                 S.Code = RemoteSettings.NewCode(); S.Save(); server.Start(); ShowLink(); state.Text = "New link made - the old one no longer works.";
             };
-            btns.Children.Add(copy); btns.Children.Add(open); btns.Children.Add(renew);
+            var upd = new Button { Content = "Check for updates", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 8) }; upd.Click += (s, e) => CheckForUpdate(true);
+            btns.Children.Add(copy); btns.Children.Add(open); btns.Children.Add(renew); btns.Children.Add(upd);
             info.Children.Add(btns);
             row.Children.Add(info);
             sp.Children.Add(row);
@@ -178,6 +191,11 @@ namespace HallowRemote
             sw("Start with Windows (in the tray)", StartsWithWindows(), v => SetStartWithWindows(v));
             sw("Use the Hallow icon (when Hallow Hub runs, Hallow Remote lives in its tray menu instead of having its own icon)", S.UseHallowIcon, v => { S.UseHallowIcon = v; CheckHost(); });
             sw("Use the Hallow accent (the colour picked in Hallow Toolkit, here and on your phone)", S.UseHallowAccent, v => { S.UseHallowAccent = v; S.Save(); Dispatcher.BeginInvoke(new Action(ApplyAccent)); });
+            // v1.7: trackpad and keyboard from the phone - off by default, with a clear warning
+            sw("Let your phone use the mouse and keyboard (trackpad and typing on the Mouse page)", S.AllowInput, v => { S.AllowInput = v; S.Save(); server.Changed(); inputWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
+            inputWarn = new TextBlock { Text = "Anyone with your link can now move the mouse and type on this PC - like sitting at it. Turn it off when you don't need it; Pause the remote also stops it.",
+                Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -2, 0, 6), Visibility = S.AllowInput ? Visibility.Visible : Visibility.Collapsed };
+            more.Children.Add(inputWarn);
             sp.Children.Add(more);
             log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
             sp.Children.Add(log);
@@ -252,6 +270,39 @@ namespace HallowRemote
             tray.MouseClick += (s, e) => { if (e.Button == WF.MouseButtons.Left) ShowFromTray(); };
         }
         public void ShowFromTray() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
+        // ---- v1.7: updates from GitHub (asks first; the download is checked against GitHub's SHA-256)
+        Button updateBtn; TextBlock inputWarn; GhRelease pending;
+        void CheckForUpdate(bool manual)
+        {
+            if (manual) { state.Text = "Checking GitHub for a newer Hallow Remote..."; state.Foreground = (Brush)FindResource("Muted"); }
+            new Thread(() =>
+            {
+                var r = Updater.Latest();
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    S.LastUpdateCheck = DateTime.Now.ToString("o"); S.Save();
+                    if (r == null) { if (manual) { state.Text = "Couldn't reach GitHub - try again later."; state.Foreground = B("#F0BE5A"); } return; }
+                    if (!Updater.IsNewer(r)) { if (manual) { state.Text = "You have the newest version (v" + Program.Version + ")."; state.Foreground = B("#6ED28C"); } return; }
+                    pending = r; updateBtn.Content = "Update to v" + r.Version.ToString(2); updateBtn.Visibility = Visibility.Visible;
+                    updateBtn.ToolTip = (r.Notes ?? "").Length > 600 ? r.Notes.Substring(0, 600) + "..." : r.Notes;
+                    state.Text = "Hallow Remote v" + r.Version.ToString(2) + " is out - click Update at the top (your phone link stays the same)."; state.Foreground = B("#6ED28C");
+                    if (!IsVisible) Notify("Hallow Remote", "Version " + r.Version.ToString(2) + " is out - open Hallow Remote to update.");
+                }));
+            }) { IsBackground = true }.Start();
+        }
+        void InstallUpdate()
+        {
+            if (pending == null) return;
+            if (MessageBox.Show(this, "Install Hallow Remote v" + pending.Version.ToString(2) + " now?\n\nIt downloads from GitHub, checks the file, and reopens by itself. Your phone link and settings stay the same.", "Update Hallow Remote", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+            updateBtn.IsEnabled = false; updateBtn.Content = "Updating...";
+            var r = pending;
+            new Thread(() =>
+            {
+                var err = Updater.Install(r);
+                Dispatcher.BeginInvoke(new Action(() => { if (err != null) { state.Text = err; state.Foreground = B("#F0BE5A"); updateBtn.IsEnabled = true; updateBtn.Content = "Update to v" + r.Version.ToString(2); } else state.Text = "Installing the update - Hallow Remote reopens in a few seconds."; }));
+            }) { IsBackground = true }.Start();
+        }
+
         // ---- v1.5: the Hallow accent changed (or the setting did): reload the theme and rebuild the window
         System.IO.FileSystemWatcher accentWatch;
         void ApplyAccent()
