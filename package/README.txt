@@ -7,6 +7,11 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.11
+- Files tab: send files from your phone into Downloads\Hallow Remote (off until you
+  turn it on in the PC window; up to 200 MB a file by default).
+- Send to phone: drag files onto the PC window - they're on your phone for 24 hours.
+
 WHAT'S NEW IN 1.10
 - Keys tab: your Hallow Keys vault on your phone (read-only, needs HTTPS).
 

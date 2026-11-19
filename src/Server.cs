@@ -38,8 +38,11 @@ namespace HallowRemote
         [DataMember] public List<Launcher> Launchers = new List<Launcher>();   // v1.8: apps the phone may open (set up on the PC only)
         [DataMember] public bool AllowClipboard = false;   // v1.9: the phone may put text on this PC's clipboard
         [DataMember] public bool AllowPeek = false;        // v1.9: the phone may take one screenshot when asked
-        [OnDeserializing] void D(StreamingContext c) { Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
-        [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); if (Launchers == null) Launchers = new List<Launcher>(); }
+        [DataMember] public bool AllowUpload = false;      // v1.11: the phone may send files into Downloads\Hallow Remote (off by default)
+        [DataMember] public int UploadMaxMB = 200;         // v1.11: the largest file the phone may send
+        [DataMember] public List<Outgoing> Outbox = new List<Outgoing>();   // v1.11: files waiting for the phone (paths stay on the PC)
+        [OnDeserializing] void D(StreamingContext c) { AllowUpload = false; UploadMaxMB = 200; Outbox = new List<Outgoing>(); Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
+        [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); if (Launchers == null) Launchers = new List<Launcher>(); if (Outbox == null) Outbox = new List<Outgoing>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
         public static string Dir { get { return TestDir != null ? Path.Combine(TestDir, "HallowRemote") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
@@ -123,7 +126,7 @@ namespace HallowRemote
         }
     }
 
-    public class Server
+    public partial class Server
     {
         [StructLayout(LayoutKind.Sequential)]
         class MEMORYSTATUSEX { public uint dwLength = 64; public uint dwMemoryLoad; public ulong ullTotalPhys, ullAvailPhys, ullTotalPageFile, ullAvailPageFile, ullTotalVirtual, ullAvailVirtual, ullAvailExtendedVirtual; }
@@ -207,14 +210,15 @@ namespace HallowRemote
                     if (first == 0x16) { var ssl = new SslStream(new PrefixStream(st, first), false); ssl.AuthenticateAsServer(c0, false, SslProtocols.Tls12 | (SslProtocols)12288, false); st = ssl; }
                     else { st = new PrefixStream(st, first); plainWhileTls = true; }
                 }
-                var buf = new byte[8192]; int n = 0;
-                while (n < buf.Length) { int r = st.Read(buf, n, buf.Length - n); if (r <= 0) break; n += r; if (Encoding.ASCII.GetString(buf, 0, n).Contains("\r\n\r\n")) break; }
-                var lines = Encoding.ASCII.GetString(buf, 0, n).Split('\n');
+                var buf = new byte[8192]; int n = 0, he = -1;
+                while (n < buf.Length) { int r = st.Read(buf, n, buf.Length - n); if (r <= 0) break; n += r; he = Encoding.ASCII.GetString(buf, 0, n).IndexOf("\r\n\r\n"); if (he >= 0) break; }
+                int bodyAt = he < 0 ? n : he + 4;   // v1.11: an upload's first bytes may already be in buf after the headers
+                var lines = Encoding.ASCII.GetString(buf, 0, he < 0 ? n : he).Split('\n');
                 var line = lines[0].Trim();
                 var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var h in lines.Skip(1)) { var c = h.IndexOf(':'); if (c > 0) headers[h.Substring(0, c).Trim()] = h.Substring(c + 1).Trim(); }
                 var parts = line.Split(' ');
-                if (parts.Length < 2 || parts[0] != "GET") { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes("Only GET")); return; }
+                if (parts.Length < 2 || (parts[0] != "GET" && parts[0] != "POST")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes("Only GET")); return; }
                 var target = parts[1]; var qi = target.IndexOf('?');
                 var path = qi < 0 ? target : target.Substring(0, qi); var query = qi < 0 ? "" : target.Substring(qi + 1);
                 var segs = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
@@ -227,7 +231,16 @@ namespace HallowRemote
                 }
                 var rest = "/" + string.Join("/", segs.Skip(1));
                 var q = Query(query);
-                if (rest == "/") Send(st, 200, "text/html; charset=utf-8", Resource("index.html"));
+                // v1.11: POST only for a file from the phone (streamed to disk); everything else stays GET
+                if ((parts[0] == "POST") != (rest == "/api/upload")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes(parts[0] == "POST" ? "Only GET" : "Only POST")); return; }
+                if (rest == "/api/upload") { int code; var res = Upload(client, st, headers, q, buf, bodyAt, n, out code); Changed(); Send(st, code, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest.StartsWith("/api/get/"))   // v1.11: a file from the PC's "Send to phone" list, by its random id
+                {
+                    var o = OutgoingById(rest.Substring(9));
+                    if (o == null) Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found"));
+                    else { client.SendTimeout = 30000; string range; headers.TryGetValue("Range", out range); SendFile(st, o.Path, ContentType(o.Name), range, "Content-Disposition: " + Disposition(o.Name) + "\r\n"); if (Log != null && range == null) Log("downloaded " + o.Name); }
+                }
+                else if (rest == "/")Send(st, 200, "text/html; charset=utf-8", Resource("index.html"));
                 else if (rest == "/icon.png") Send(st, 200, "image/png", Resource("icon.png"));
                 else if (rest == "/manifest.json") Send(st, 200, "application/manifest+json", Encoding.UTF8.GetBytes(
                     "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
@@ -286,12 +299,12 @@ namespace HallowRemote
         }
         static void Send(Stream st, int code, string type, byte[] body, bool cache = false)
         {
-            var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : code == 403 ? " Forbidden" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
+            var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : code == 403 ? " Forbidden" : code == 400 ? " Bad Request" : code == 405 ? " Method Not Allowed" : code == 411 ? " Length Required" : code == 413 ? " Payload Too Large" : code == 507 ? " Insufficient Storage" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
                 "\r\nCache-Control: " + (cache ? "max-age=3600" : "no-store") + "\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
             var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length); st.Write(body, 0, body.Length); st.Flush();
         }
         // v1.2: a file with HTTP Range support (phones fetch videos in pieces and seek with it)
-        static void SendFile(Stream st, string path, string type, string range)
+        static void SendFile(Stream st, string path, string type, string range, string extra = "")
         {
             using (var f = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             {
@@ -309,7 +322,7 @@ namespace HallowRemote
                 if (to < from) to = from - 1;
                 long count = to - from + 1;
                 var head = "HTTP/1.1 " + (code == 206 ? "206 Partial Content" : "200 OK") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + count + "\r\nAccept-Ranges: bytes\r\n" +
-                    (code == 206 ? "Content-Range: bytes " + from + "-" + to + "/" + len + "\r\n" : "") +
+                    (code == 206 ? "Content-Range: bytes " + from + "-" + to + "/" + len + "\r\n" : "") + extra +
                     "Cache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
                 var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length);
                 f.Position = from; var buf = new byte[65536];
@@ -622,6 +635,7 @@ namespace HallowRemote
                 { "apps", AppsJson() },  // v1.8: names only (never paths)
                 { "clipboard", S.AllowClipboard && !Paused }, { "peek", S.AllowPeek && !Paused },   // v1.9
                 { "keys", KeysState() },   // v1.10
+                { "files", FilesState() },   // v1.11: upload switch and the "Send to phone" list (names, sizes, random ids - never paths)
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;

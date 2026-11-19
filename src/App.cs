@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.10.0.0")]
-[assembly: AssemblyFileVersion("1.10.0.0")]
+[assembly: AssemblyVersion("1.11.0.0")]
+[assembly: AssemblyFileVersion("1.11.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.10";
+        public const string Version = "1.11";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -103,6 +103,16 @@ namespace HallowRemote
             };
             server.Peeked = () => Dispatcher.BeginInvoke(new Action(() => { log.Text = DateTime.Now.ToString("HH:mm") + "  Your phone peeked at the screen"; Notify("Hallow Remote", "Your phone just took a screen peek."); }));
             server.Log = m => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  From your phone: " + m));
+            // v1.11: each file from the phone is announced (log line and a balloon - through the Hallow icon when Hub hosts it)
+            server.Uploaded = (name, size) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                log.Text = DateTime.Now.ToString("HH:mm") + "  Your phone sent " + name + " (" + Files.Size(size) + ")";
+                Notify("Hallow Remote", "Your phone sent " + name + " (" + Files.Size(size) + ") - it's in Downloads\\Hallow Remote.");
+            }));
+            // v1.11: drop files on this window to put them on the "Send to phone" list
+            AllowDrop = true;
+            DragOver += (s, e) => { e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None; e.Handled = true; };
+            Drop += (s, e) => { var files = e.Data.GetData(DataFormats.FileDrop) as string[]; if (files != null) AddOutgoing(files); };
             if (!Snap.On) { server.Start(); SetupTray(); Family.Serve("Remote", Command); }
             else { server.Address = "100.90.88.26"; }
             ShowLink();
@@ -111,6 +121,7 @@ namespace HallowRemote
                 // Tailscale can connect after Windows starts: try again every 30 s until it's up
                 var retry = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
                 retry.Tick += (s, e) => { if (!paused && (server.Address == null || server.Error != null || Tls.Stamp() != server.TlsStamp)) { server.Start(); ShowLink(); } };   // v1.3: also picks up a new or renewed HTTPS certificate
+                retry.Tick += (s, e) => RefreshOutbox();   // v1.11: "Send to phone" entries drop out after 24 hours
                 retry.Start();
                 // v1.4: one Hallow icon - every 5 s ask Hallow Hub whether it hosts the tray menu; hide this icon while it does
                 var host = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; host.Tick += (s, e) => CheckHost(); host.Start(); CheckHost();
@@ -157,7 +168,7 @@ namespace HallowRemote
             qrBox.Child = qr; DockPanel.SetDock(qrBox, Dock.Left); row.Children.Add(qrBox);
             var info = new StackPanel();
             info.Children.Add(new TextBlock { Text = "Scan this with your phone's camera", FontSize = 16, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
-            info.Children.Add(new TextBlock { Text = "Then use your browser's \"Add to Home screen\" so it opens like an app. You get Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, your PC's stats and sleep / shut down / lock.",
+            info.Children.Add(new TextBlock { Text = "Then use your browser's \"Add to Home screen\" so it opens like an app. You get Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, your PC's stats, files both ways and sleep / shut down / lock.",
                 Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
             link = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = B("#ECE8F4"), Margin = new Thickness(0, 0, 0, 10) };
             info.Children.Add(link);
@@ -219,6 +230,33 @@ namespace HallowRemote
             appsHead.Children.Add(new TextBlock { Text = "Apps your phone can open", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
             sp.Children.Add(appsHead);
             appsList = new StackPanel(); sp.Children.Add(appsList); RefreshApps();
+            // v1.11: files - from the phone into Downloads\Hallow Remote (off by default), and a "Send to phone" list filled here only
+            var filesHead = new DockPanel { Margin = new Thickness(0, 14, 0, 4) };
+            filesHead.Children.Add(new TextBlock { Text = "Files", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            sp.Children.Add(filesHead);
+            var upSw = new CheckBox { Content = new TextBlock { Text = "Let your phone send files to this PC (saved in Downloads\\Hallow Remote)", TextWrapping = TextWrapping.Wrap }, IsChecked = S.AllowUpload, Style = (Style)FindResource("Switch") };
+            sp.Children.Add(upSw);
+            var upRow = new WrapPanel { Margin = new Thickness(50, 0, 0, 6), Visibility = S.AllowUpload ? Visibility.Visible : Visibility.Collapsed };
+            upRow.Children.Add(new TextBlock { Text = "Up to", Foreground = (Brush)FindResource("Muted"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
+            var sizes = new StackPanel { Orientation = Orientation.Horizontal };
+            foreach (var mb in new[] { 50, 200, 1024, 4096 })
+            {
+                var v = mb; var c = new ToggleButton { Content = mb < 1024 ? mb + " MB" : (mb / 1024) + " GB", Style = (Style)FindResource("Chip"), Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(10, 3, 10, 3), IsChecked = S.UploadMaxMB == mb };
+                c.Click += (s, e) => { S.UploadMaxMB = v; S.Save(); foreach (ToggleButton x in sizes.Children) x.IsChecked = x == c; server.Changed(); };
+                sizes.Children.Add(c);
+            }
+            upRow.Children.Add(sizes);
+            var openDl = new Button { Content = "Open the folder", Style = (Style)FindResource("Btn"), Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0) };
+            openDl.Click += (s, e) => { try { System.IO.Directory.CreateDirectory(Files.UploadDir); System.Diagnostics.Process.Start("explorer.exe", "\"" + Files.UploadDir + "\""); } catch { } };
+            upRow.Children.Add(openDl);
+            sp.Children.Add(upRow);
+            upSw.Click += (s, e) => { S.AllowUpload = upSw.IsChecked == true; S.Save(); server.Changed(); upRow.Visibility = S.AllowUpload ? Visibility.Visible : Visibility.Collapsed; };
+            var outHead = new DockPanel { Margin = new Thickness(0, 8, 0, 4) };
+            var addOut = new Button { Content = "Add a file", Style = (Style)FindResource("Btn") }; addOut.Click += (s, e) => PickOutgoing();
+            DockPanel.SetDock(addOut, Dock.Right); outHead.Children.Add(addOut);
+            outHead.Children.Add(new TextBlock { Text = "Send to phone", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            sp.Children.Add(outHead);
+            outList = new StackPanel(); sp.Children.Add(outList); RefreshOutbox();
             log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
             sp.Children.Add(log);
             // v1.3: how to turn on HTTPS (shown in Tailscale mode until a certificate is in place)
@@ -310,6 +348,40 @@ namespace HallowRemote
                 tb.Inlines.Add(new System.Windows.Documents.Run("   " + l.Path) { Foreground = (Brush)FindResource("Muted"), FontSize = 11 });
                 row.Children.Add(tb); appsList.Children.Add(row);
             }
+        }
+        // ---- v1.11: the "Send to phone" list (the phone sees names and sizes, never paths; 24 hours each)
+        StackPanel outList;
+        void RefreshOutbox()
+        {
+            if (outList == null) return;
+            outList.Children.Clear();
+            var list = server.OutboxNow();
+            if (list.Count == 0) outList.Children.Add(new TextBlock { Text = "Nothing yet - drag files onto this window, or Add a file. They show up on your phone's Files tab for 24 hours (names and sizes only).", Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
+            foreach (var o in list)
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) }; var id = o.Id;
+                var rm = new Button { Content = "Remove", Style = (Style)FindResource("Btn"), Padding = new Thickness(10, 3, 10, 3) };
+                rm.Click += (s, e) => { server.RemoveOutgoing(id); RefreshOutbox(); };
+                DockPanel.SetDock(rm, Dock.Right); row.Children.Add(rm);
+                var tb = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = o.Path };
+                tb.Inlines.Add(new System.Windows.Documents.Run(o.Name) { FontWeight = FontWeights.SemiBold });
+                var h = (int)Math.Ceiling(Files.HoursLeft(o));
+                tb.Inlines.Add(new System.Windows.Documents.Run("   " + Files.Size(o.Size) + "  -  " + (h <= 1 ? "under an hour left" : h + " hours left")) { Foreground = (Brush)FindResource("Muted"), FontSize = 11 });
+                row.Children.Add(tb); outList.Children.Add(row);
+            }
+        }
+        void PickOutgoing()
+        {
+            var dlg = new OpenFileDialog { Title = "Pick files to send to your phone", Multiselect = true };
+            if (dlg.ShowDialog(this) == true) AddOutgoing(dlg.FileNames);
+        }
+        void AddOutgoing(string[] paths)
+        {
+            string err = null; int added = 0;
+            foreach (var p in paths) { var r = server.AddOutgoing(p); if (r == null) added++; else err = r; }
+            RefreshOutbox();
+            if (err != null) { state.Text = err + "."; state.Foreground = B("#F0BE5A"); }
+            else if (added > 0) { state.Text = (added == 1 ? "1 file is" : added + " files are") + " ready on your phone's Files tab for 24 hours."; state.Foreground = B("#6ED28C"); }
         }
         void AddLauncher()
         {
@@ -482,7 +554,7 @@ namespace HallowRemote
         void Notify(string title, string text)
         {
             if (tray == null) return;
-            if (!hubHosts) { tray.ShowBalloonTip(4000, title, text, WF.ToolTipIcon.None); return; }
+            if (!hubHosts) { if (RemoteSettings.TestDir == null) tray.ShowBalloonTip(4000, title, text, WF.ToolTipIcon.None); return; }   // developer tests: no balloons on the screen
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 var r = Family.Send("Hub", "notify Remote\t" + title + "\t" + text, 2000);

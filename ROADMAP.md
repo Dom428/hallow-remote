@@ -14,6 +14,7 @@
 | **1.7** | Updates from GitHub (asks first, SHA-256 checked, numeric version compare); trackpad, clicks, drag, scroll, typing and a fixed set of keys on the phone (SendInput) - off by default, its own switch with a warning, never while paused |
 | **1.8** | Media keys, PC volume and mute (Core Audio) and now playing (Windows media sessions) without Hallow Mixer; apps to open from a list set up on the PC only (phone sees names and random ids, never paths); both in My buttons |
 | **1.9** | Text from the phone onto the PC clipboard (opt-in, up to 2000 characters); Screen peek: one JPEG of the main screen per tap (opt-in, off by default, at most one every 2 s, announced on the PC each time); both stop while paused |
+| **1.11** | Files both ways: phone -> `Downloads\Hallow Remote` (opt-in, off by default; size cap 200 MB by default; streamed to disk; safe names, never overwrites; marked as from another computer; announced on the PC each time; stops while paused), and a Send to phone list filled on the PC by drag and drop or a picker (the phone sees names, sizes and random ids, never paths; 24 hours each) |
 | **1.10** | Keys tab: Hallow Keys' phone copy served only over HTTPS (403 otherwise), decrypted on the phone with WebCrypto (PBKDF2-SHA256 + AES-GCM), view and copy only, TOTP codes, locks after 2 minutes or when the page is hidden; a service worker keeps the page and the encrypted copy for offline use |
 
 ## Next
@@ -28,7 +29,7 @@ What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow 
 - Screen viewer - **buildable as a one-shot screen peek** (opt-in, off by default, the PC says each time) -> 1.9; a live screen stream is not planned (bandwidth and privacy)
 - Presentation remote - **buildable** (arrow keys on the keyboard page) -> 1.7
 - App-specific remotes (90+ in Unified Remote) - **partly**: My buttons covers fixed actions; per-app remotes would need an action for each app - later
-- File transfer phone <-> PC - **buildable** later (upload into Downloads), not in this round
+- File transfer phone <-> PC - **buildable** (upload into Downloads, opt-in; a Send to phone list set up on the PC) -> 1.11
 - Wake-on-LAN - **not buildable here**: a sleeping or off PC can't run Remote; it needs another always-on device on the network
 - Phone notifications on the PC, SMS, ring my phone, phone battery - **not buildable**: a web page can't read the phone's notifications, texts or battery; it needs a native phone app
 - Widgets, voice control, Siri, NFC, smartwatch - **not buildable**: native phone app features
@@ -36,6 +37,7 @@ What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow 
 - Works on networks that block device-to-device traffic (KDE Connect over OpenVPN) - **already covered** by Tailscale
 
 ### Still to check by hand
+- Sending files from a real phone (iOS / Android file pickers, big videos over Tailscale) and downloading them on the phone - tests used a local HTTP client and a desktop browser
 - Trackpad, typing, media keys, PC volume, clipboard and screen peek on the real PC (tests only used stand-ins so nothing reached the real mouse, keyboard, volume, clipboard or screen)
 - Live stats with a real Hallow Overlay: Overlay 1.8 shares its last match but not live FPS / ping / server in its status yet, so those tiles appear once it does
 - One Hallow icon with the real Hallow Hub 2.4 (tested against a fake Hub pipe)

@@ -13,6 +13,7 @@ Your phone as a remote for the Hallow apps - [Hallow Mixer](https://github.com/D
 - **My buttons:** your own grid of the actions above
 - **Media and apps:** PC volume and mute, what's playing and play / pause / skip (any player), and apps to open from a list you set up on the PC
 - **Clipboard and screen peek:** send text to the PC clipboard; take one picture of the screen when you ask (both opt-in)
+- **Files:** send files from the phone into `Downloads\Hallow Remote` (opt-in, size cap), and get files the PC puts on its Send to phone list (24 hours)
 - **Keys:** a read-only copy of your Hallow Keys vault (HTTPS only; decrypted on the phone)
 - **Mouse:** trackpad, clicks, scrolling, typing and arrow keys (also a presentation clicker) - off until you turn it on in the PC window
 
@@ -22,6 +23,7 @@ The PC side is a small tray app that serves a phone web page (add it to your hom
 
 ## What's new
 
+- **1.11** - Files both ways. From the phone: a Files tab sends files into `Downloads\Hallow Remote` on the PC - off until you turn it on in the PC window, up to 200 MB by default (50 MB to 4 GB), written straight to disk, never over an existing file (`name (2).ext`), with safe names only (no folders or Windows device names), marked as downloaded from another computer, and the PC tells you each time (through the Hallow icon when Hub hosts it). Pausing the remote stops a file part-way. To the phone: drag files onto the PC window (or Add a file) and they show up on the phone's Files tab for 24 hours - the phone sees names and sizes, never paths.
 - **1.10** - A Keys tab for [Hallow Keys](https://github.com/Dom428/hallow-keys): its read-only phone copy, opened on your phone with your master password (decrypted on the phone with WebCrypto - needs HTTPS). The page and the encrypted copy also open without a connection.
 - **1.9** - Send text from the phone to the PC clipboard, and Screen peek: one picture of the PC's main screen when you tap. Both are off until you turn them on in the PC window; the PC tells you each time the screen is peeked.
 - **1.8** - Media without Hallow Mixer: play / pause / skip with the media keys, what's playing on the PC (Windows' own media info), and the PC's volume and mute. Open an app on the PC from a list you set up in the PC window (the phone only sees the names).

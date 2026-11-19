@@ -41,7 +41,7 @@ input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}
 .vg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #2e2639;font-size:14px}.vg:first-of-type{border-top:0}.vg span{color:#8f88a0;font-size:13px;text-align:right}
 .power{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.power .btn{padding:14px 6px}
 .btn:disabled{opacity:.55}
-.tabs{display:flex;gap:6px;margin:0 0 14px}.tabs button{flex:1;border:0;border-radius:12px;padding:9px 6px;background:#211b2a;color:#8f88a0;font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
+.tabs{display:flex;gap:6px;margin:0 0 14px}.tabs button{flex:1;min-width:0;border:0;border-radius:12px;padding:9px 2px;background:#211b2a;color:#8f88a0;font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
 .big{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.big .stat{padding:18px 8px}.big .stat b{font-size:34px;font-weight:700}.big .stat small{font-size:13px}
 .src{color:#8f88a0;font-size:12px;margin:10px 2px 0}
 .mine{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.mine .btn{padding:20px 8px;font-size:15px;min-height:72px}
@@ -56,8 +56,9 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 </style></head>
 <body>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
-<div class="tabs"><button id="t_home" class="on" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button></div>
+<div class="tabs"><button id="t_home" class="on" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button></div>
 <div id="v_keys" style="display:none"></div>
+<div id="v_files" style="display:none"><h2>Send to your PC</h2><div id="upoff" class="card off">Sending files is off. Turn on <b>Let your phone send files to this PC</b> in Hallow Remote on your PC.</div><div id="upon" class="card" style="display:none"><input type="file" id="upfile" multiple style="display:none" onchange="upload(this.files)"><button class="btn go" style="width:100%" id="upbtn" onclick="el('upfile').click()">Choose files</button><div class="sub" id="upmsg" style="margin-top:8px"></div></div><h2>From your PC</h2><div id="outbox"></div></div>
 <div id="v_pad" style="display:none"><div id="padoff" class="card off" style="display:none">The mouse and keyboard are off. Turn on <b>Let your phone use the mouse and keyboard</b> in Hallow Remote on your PC.</div>
 <div id="padon"><div id="pad">Drag to move - tap to click<br>two fingers: tap = right click, drag = scroll</div>
 <div class="row3"><button class="btn" ontouchstart="btnHold('left',event)" ontouchend="btnRelease('left',event)" onmousedown="btnHold('left',event)" onmouseup="btnRelease('left',event)">Left</button><button class="btn" onclick="inp('k=button&b=middle')">Middle</button><button class="btn" onclick="inp('k=button&b=right')">Right</button></div>
@@ -99,7 +100,7 @@ function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cl
 function render(s) {
   el('t_keys').style.display = s.keys ? '' : 'none'; var kk = JSON.stringify(s.keys); if (kk !== lastKeysState) { lastKeysState = kk; if (view == 'keys') renderKeys(s); }
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
-  if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s);
+  if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s); if (view == 'files') renderFiles(s);
   if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
   el('pc').textContent = s.pc; el('time').textContent = s.time;
   var t = s.stats, ram = t.ramTotal > 0 ? t.ramUsed / t.ramTotal : 0;
@@ -196,7 +197,7 @@ function power(what) {
 // ---- v1.6: tabs, Live stats, My buttons
 var view = 'home', editing = false, catalog = [], mine = [];
 function tab(v) {
-  view = v; ['home', 'live', 'mine', 'pad', 'keys'].forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
+  view = v; ['home', 'live', 'mine', 'pad', 'keys', 'files'].forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
   if (v == 'mine' && !catalog.length) loadButtons();
   if (last) render(last);
   if (v == 'keys' && last) renderKeys(last);
@@ -300,6 +301,31 @@ function sendText(enter) {
 function btnHold(b, e) { e.preventDefault(); holdBtn = b; inp('k=button&b=' + b + '&s=down'); }
 function btnRelease(b, e) { e.preventDefault(); if (holdBtn) inp('k=button&b=' + b + '&s=up'); holdBtn = null; }
 padSetup();
+// ---- v1.11: files both ways - up to the PC's Downloads\Hallow Remote (streamed, one at a time), down from the PC's "Send to phone" list
+var lastOut = '', uploading = false;
+function renderFiles(s) {
+  var f = s.files || { upload: false, outbox: [] };
+  el('upoff').style.display = f.upload ? 'none' : ''; el('upon').style.display = f.upload ? '' : 'none';
+  var ok = JSON.stringify(f.outbox); if (ok === lastOut) return; lastOut = ok;
+  el('outbox').innerHTML = !f.outbox.length ? '<div class="card off">Nothing waiting. On your PC, drag files onto Hallow Remote\'s window (or Add a file) - they show up here for 24 hours.</div>' :
+    '<div class="card">' + f.outbox.map(function (o) { return '<a class="clip" style="text-decoration:none;color:inherit" href="' + base + 'api/get/' + o.id + '" download="' + esc(o.name) + '"><div class="ni"></div><div><b>' + esc(o.name) + '</b><small>' + esc(o.size) + ' - ' + (o.hours <= 1 ? 'under an hour left' : o.hours + ' h left') + '</small></div></a>'; }).join('') + '</div>';
+}
+function upload(list) {
+  if (uploading || !list || !list.length) return;
+  var files = Array.prototype.slice.call(list), max = ((last && last.files && last.files.maxMB) || 200) * 1048576, msg = el('upmsg'), b = el('upbtn'), done = 0;
+  uploading = true; b.disabled = true;
+  (function next() {
+    var f = files.shift();
+    if (!f) { uploading = false; b.disabled = false; el('upfile').value = ''; if (done) toast(done == 1 ? 'Sent to your PC' : done + ' files sent to your PC'); return; }
+    if (f.size > max) { msg.textContent = f.name + ' is too big - your PC takes files up to ' + Math.round(max / 1048576) + ' MB'; return next(); }
+    if (!f.size) { msg.textContent = f.name + ' is empty'; return next(); }
+    var x = new XMLHttpRequest(); x.open('POST', base + 'api/upload?name=' + encodeURIComponent(f.name));
+    x.upload.onprogress = function (e) { if (e.lengthComputable) msg.textContent = 'Sending ' + f.name + ' - ' + Math.round(e.loaded * 100 / e.total) + '%'; };
+    x.onload = function () { var j = {}; try { j = JSON.parse(x.responseText); } catch (e) { } msg.textContent = j.msg || ('Your PC said no (' + x.status + ')'); if (j.ok) done++; next(); };
+    x.onerror = function () { msg.textContent = 'Sending ' + f.name + ' stopped - is the remote paused?'; next(); };
+    x.send(f);
+  })();
+}
 // ---- v1.9: clipboard and screen peek
 function sendClip() { var v = el('cliptext').value; if (!v) return; act('a=paste&t=' + encodeURIComponent(v.slice(0, 2000))).then(function () { el('cliptext').value = ''; }); }
 var peekUrl = null;
