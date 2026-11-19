@@ -7,6 +7,10 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.8
+- What's playing, play / pause / skip and the PC volume - also without Hallow Mixer.
+- Open apps on your PC from your phone (you choose them in the PC window).
+
 WHAT'S NEW IN 1.7
 - Updates itself from GitHub (asks first, checks the download).
 - Mouse page: trackpad and keyboard on your phone - off until you turn it on in the PC window.
@@ -48,6 +52,8 @@ ON YOUR PHONE
 - This PC: sleep, shut down, lock (tap twice to confirm)
 - Live stats: big numbers - FPS, ping and server from Hallow Overlay, and your PC's stats
 - My buttons: your own grid of the actions above (choose, order, rename)
+- Media: PC volume, what's playing, play / pause / skip - also without Hallow Mixer
+- Open on your PC: apps you add in the PC window (Add an app)
 - Mouse: trackpad and keyboard - turn on "Let your phone use the mouse and keyboard" on the PC first
 - Your PC: CPU, GPU, GPU temperature, RAM
 

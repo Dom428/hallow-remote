@@ -68,6 +68,8 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 <div class="stats" id="stats"></div>
 <button class="mic" id="mic" style="display:none" onclick="act('a=mic')">Mic</button>
 <div id="np"></div>
+<div id="sysmedia"></div>
+<div id="apps"></div>
 <div id="mixer"></div>
 <div id="games"></div>
 <div id="session"></div>
@@ -118,6 +120,18 @@ function render(s) {
       el('mixer').innerHTML = h;
     }
   } else { mic.style.display = 'none'; el('np').innerHTML = ''; el('mixer').innerHTML = '<h2>Mixer</h2><div class="card off">Hallow Mixer isn\'t running on your PC.</div>'; }
+  // v1.8: PC volume and what's playing without Hallow Mixer, and apps to open
+  var sm = s.sys, sh = '';
+  if (sm) {
+    if (!mx && sm.np) { var n2 = sm.np; sh += '<h2>Now playing</h2><div class="card np"><div class="t">' + esc(n2.title) + '</div><div class="a">' + esc([n2.artist, n2.app].filter(Boolean).join(' - ')) + (n2.playing ? '' : ' (paused)') +
+      '</div><div class="b"><button class="btn" onclick="act(\'a=pcmedia&do=prev\')">&#9198;</button><button class="btn go" style="flex:1" onclick="act(\'a=pcmedia&do=playpause\')">' + (n2.playing ? 'Pause' : 'Play') + '</button><button class="btn" onclick="act(\'a=pcmedia&do=next\')">&#9197;</button></div></div>'; }
+    else if (!mx) sh += '<h2>Media</h2><div class="card np"><div class="b"><button class="btn" onclick="act(\'a=pcmedia&do=prev\')">&#9198;</button><button class="btn go" style="flex:1" onclick="act(\'a=pcmedia&do=playpause\')">Play / pause</button><button class="btn" onclick="act(\'a=pcmedia&do=next\')">&#9197;</button></div></div>';
+    if (sm.volume >= 0 && !dragging.sysvol) sh += '<h2>PC volume</h2><div class="card"><div class="row" style="margin:0"><input type="range" min="0" max="100" value="' + sm.volume + '" ontouchstart="dragging.sysvol=1" ontouchend="dragging.sysvol=0" onmousedown="dragging.sysvol=1" onmouseup="dragging.sysvol=0" oninput="sysVol(this.value)">' +
+      '<span class="p" id="p_sysvol">' + sm.volume + '%</span><button class="btn m' + (sm.muted ? ' on' : '') + '" onclick="act(\'a=volmute\')">' + (sm.muted ? 'Muted' : 'Mute') + '</button></div></div>';
+    if (!dragging.sysvol && sh !== lastSys) { lastSys = sh; el('sysmedia').innerHTML = sh; }
+  }
+  var ak = JSON.stringify(s.apps || []);
+  if (ak !== lastApps) { lastApps = ak; el('apps').innerHTML = !(s.apps || []).length ? '' : '<h2>Open on your PC</h2><div class="chips">' + s.apps.map(function (a) { return '<button class="btn" onclick="act(\'a=open&id=' + a.id + '\')">' + esc(a.name) + '</button>'; }).join('') + '</div>'; }
   var gk = JSON.stringify(s.games) + s.hub;
   if (gk !== lastGames) {
     lastGames = gk;
@@ -157,7 +171,8 @@ function render(s) {
   el('overlay').innerHTML = !o ? '' : '<h2>Hallow Overlay</h2><div class="card session"><div><b>Overlay</b><div class="sub">' + (o.visible ? 'On screen' : 'Hidden') + '</div></div>' +
     '<button class="btn ' + (o.visible ? '' : 'go') + '" onclick="act(\'a=overlay&do=' + (o.visible ? 'hide' : 'show') + '\')">' + (o.visible ? 'Hide' : 'Show') + '</button></div>';
 }
-var lastClips = '', curAccent = '';
+var lastClips = '', curAccent = '', lastSys = '', lastApps = '';
+function sysVol(v) { el('p_sysvol').textContent = v + '%'; clearTimeout(timers.sysvol); timers.sysvol = setTimeout(function () { act('a=vol&v=' + v, true); }, 150); }
 function dur(sec) { sec = Math.round(sec || 0); return Math.floor(sec / 60) + ':' + ('0' + sec % 60).slice(-2); }
 function saveClip() { var b = el('saveclip'); if (b) { b.disabled = true; b.textContent = 'Saving...'; } act('a=clip').then(function () { lastClips = ''; load(); }); }
 function watch(id, title) { el('ptitle').textContent = title; var v = el('video'); v.src = base + 'api/clip/' + id; el('player').style.display = 'flex'; v.play().catch(function () {}); }

@@ -35,8 +35,9 @@ namespace HallowRemote
         [DataMember] public List<MyButton> Buttons = new List<MyButton>();   // v1.6: the phone's "My buttons" (only ids from the fixed action list)
         [DataMember] public bool AllowInput = false;       // v1.7: the phone may move the mouse and type (off by default)
         [DataMember] public string LastUpdateCheck = "";   // v1.7
-        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
-        [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); }
+        [DataMember] public List<Launcher> Launchers = new List<Launcher>();   // v1.8: apps the phone may open (set up on the PC only)
+        [OnDeserializing] void D(StreamingContext c) { Launchers = new List<Launcher>(); Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
+        [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); if (Launchers == null) Launchers = new List<Launcher>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
         public static string Dir { get { return TestDir != null ? Path.Combine(TestDir, "HallowRemote") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
@@ -75,6 +76,14 @@ namespace HallowRemote
     {
         [DataMember] public string Id = "";      // an action id from Server.Catalog (e.g. "mic", "mute:game", "power:sleep")
         [DataMember] public string Label = "";   // your own name for it
+    }
+
+    [DataContract]
+    public class Launcher
+    {
+        [DataMember] public string Id = "";     // a short random id the phone uses (never the path)
+        [DataMember] public string Name = "";
+        [DataMember] public string Path = "";   // chosen on the PC (an .exe, a shortcut or an internet shortcut)
     }
 
     public static class Net
@@ -428,6 +437,23 @@ namespace HallowRemote
             return o;
         }
 
+        // ---- v1.8: PC volume, what's playing, and apps to open
+        static Dictionary<string, object> SysMedia()
+        {
+            bool m; var v = Media.Volume(out m);
+            return new Dictionary<string, object> { { "volume", v }, { "muted", m }, { "np", Media.NowPlaying() } };
+        }
+        List<object> AppsJson() { lock (S) return S.Launchers.Select(l => (object)new Dictionary<string, object> { { "id", l.Id }, { "name", l.Name } }).ToList(); }
+        string OpenApp(string id)
+        {
+            Launcher l; lock (S) l = S.Launchers.FirstOrDefault(x => x.Id == id);
+            if (l == null) return null;
+            if (Power_DryRun()) { if (Input.Test) try { lock (S) File.AppendAllText(Input.TestLog, "open " + l.Name + "\n"); } catch { } return "Opening " + l.Name + " (test - not really)"; }
+            try { Process.Start(new ProcessStartInfo(l.Path) { UseShellExecute = true, WorkingDirectory = System.IO.Path.GetDirectoryName(l.Path) ?? "" }); return "Opening " + l.Name; }
+            catch (Exception e) { return "Couldn't open " + l.Name + ": " + e.Message; }
+        }
+        static bool Power_DryRun() { return DryRun; }
+
         // ---- v1.7: trackpad and keyboard - only while the switch on the PC is on (off by default) and the remote isn't paused
         string InputCmd(Dictionary<string, string> q)
         {
@@ -458,6 +484,9 @@ namespace HallowRemote
             add("media:playpause", "Play / pause", "Hallow Mixer"); add("media:next", "Next track", "Hallow Mixer"); add("media:prev", "Previous track", "Hallow Mixer");
             var mx = Mixer("/state"); var presets = mx == null ? null : Get(mx, "presets") as System.Collections.ArrayList;
             if (presets != null) foreach (var p in presets) { var n = p as string; if (n != null && n.Length < 60) add("preset:" + n, "Preset " + n, "Hallow Mixer"); }
+            add("pcmedia:playpause", "Play / pause (media keys)", "This PC"); add("pcmedia:next", "Next (media keys)", "This PC"); add("pcmedia:prev", "Previous (media keys)", "This PC");
+            add("volmute", "PC sound on / off", "This PC");
+            lock (S) foreach (var l in S.Launchers) add("open:" + l.Id, "Open " + l.Name, "Open on PC");
             add("session", "Game session on / off", "Hallow Toolkit");
             add("clip", "Save clip", "Hallow Clips"); add("backup", "Back up now", "Hallow Vault");
             add("overlay:show", "Show overlay", "Hallow Overlay"); add("overlay:hide", "Hide overlay", "Hallow Overlay");
@@ -471,7 +500,9 @@ namespace HallowRemote
             var q = new Dictionary<string, string>(); int c = id.IndexOf(":"); var kind = c < 0 ? id : id.Substring(0, c); var arg = c < 0 ? "" : id.Substring(c + 1);
             switch (kind)
             {
-                case "mic": case "session": case "clip": case "backup": if (c >= 0) return null; q["a"] = kind; return q;
+                case "mic": case "session": case "clip": case "backup": case "volmute": if (c >= 0) return null; q["a"] = kind; return q;
+                case "pcmedia": if (arg != "playpause" && arg != "next" && arg != "prev") return null; q["a"] = "pcmedia"; q["do"] = arg; return q;
+                case "open": if (!System.Text.RegularExpressions.Regex.IsMatch(arg, "^[a-z0-9]{8}$")) return null; q["a"] = "open"; q["id"] = arg; return q;
                 case "mute": if (!Channels.Contains(arg)) return null; q["a"] = "mute"; q["ch"] = arg; return q;
                 case "media": if (arg != "playpause" && arg != "next" && arg != "prev") return null; q["a"] = "media"; q["do"] = arg; return q;
                 case "preset": if (arg.Length == 0 || arg.Length >= 60) return null; q["a"] = "preset"; q["name"] = arg; return q;
@@ -526,6 +557,8 @@ namespace HallowRemote
                 { "clips", Clips() }, { "vault", Vault() }, { "overlay", Overlay() },
                 { "buttons", MineJson() },   // v1.6
                 { "input", S.AllowInput && !Paused },   // v1.7
+                { "sys", SysMedia() },   // v1.8: PC volume and what's playing, without Hallow Mixer
+                { "apps", AppsJson() },  // v1.8: names only (never paths)
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;
@@ -643,6 +676,19 @@ namespace HallowRemote
                     var r = Family.Send("Overlay", d, 5000);
                     msg = Family.Error(r, "Hallow Overlay isn't running") ?? (d == "show" ? "Overlay shown" : "Overlay hidden"); break;
                 }
+                case "pcmedia":   // v1.8: media keys (work with any player)
+                {
+                    string d; q.TryGetValue("do", out d);
+                    if ((d == "playpause" || d == "next" || d == "prev") && Input.Key(d)) msg = d == "playpause" ? "Play / pause" : d == "next" ? "Next" : "Previous";
+                    break;
+                }
+                case "vol":
+                {
+                    int vv; if (int.TryParse(q.ContainsKey("v") ? q["v"] : "", out vv)) msg = Media.SetVolume(vv) ? "PC volume " + Math.Max(0, Math.Min(100, vv)) + "%" : "No sound output found";
+                    break;
+                }
+                case "volmute": msg = Media.ToggleMute() ? "PC sound on / off" : "No sound output found"; break;
+                case "open": { string id; if (q.TryGetValue("id", out id)) msg = OpenApp(id); break; }
                 case "btn":   // v1.6: one of My buttons - runs its fixed action, nothing else
                 {
                     int i; MyButton b = null;

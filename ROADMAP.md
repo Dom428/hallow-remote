@@ -12,6 +12,7 @@
 | **1.5** | The Hallow accent from Hallow Toolkit (theme.json, watched live) on the PC window and the phone page (`--accent` CSS variable from the state); crash reports kept on this PC with a once-per-crash notice and `lastCrash` in status |
 | **1.6** | Live stats page (FPS / ping / server region and last match from Hallow Overlay's status when it reports them, otherwise Remote's PC stats; 1 s refresh while open); My buttons: a grid built only from the fixed action list (choose, order, rename), saved in remote.json, power keeps its confirm tap |
 | **1.7** | Updates from GitHub (asks first, SHA-256 checked, numeric version compare); trackpad, clicks, drag, scroll, typing and a fixed set of keys on the phone (SendInput) - off by default, its own switch with a warning, never while paused |
+| **1.8** | Media keys, PC volume and mute (Core Audio) and now playing (Windows media sessions) without Hallow Mixer; apps to open from a list set up on the PC only (phone sees names and random ids, never paths); both in My buttons |
 
 ## Next
 
@@ -31,10 +32,6 @@ What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow 
 - Widgets, voice control, Siri, NFC, smartwatch - **not buildable**: native phone app features
 - Streaming games with touch controls (Steam Link) - **not buildable** sensibly: needs a low-latency video encoder and stream; Steam Link already does it
 - Works on networks that block device-to-device traffic (KDE Connect over OpenVPN) - **already covered** by Tailscale
-
-### 1.8 - Media and apps
-- Media keys, PC volume and now playing without Hallow Mixer
-- Open an app on the PC from a list you set up on the PC
 
 ### 1.9 - Clipboard and screen peek
 - Send text from the phone to the PC clipboard (opt-in)

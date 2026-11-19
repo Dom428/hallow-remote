@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.7.0.0")]
-[assembly: AssemblyFileVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.8.0.0")]
+[assembly: AssemblyFileVersion("1.8.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.7";
+        public const string Version = "1.8";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -197,6 +197,13 @@ namespace HallowRemote
                 Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -2, 0, 6), Visibility = S.AllowInput ? Visibility.Visible : Visibility.Collapsed };
             more.Children.Add(inputWarn);
             sp.Children.Add(more);
+            // v1.8: apps your phone can open - chosen here only; the phone sees their names, never paths, and can't add any
+            var appsHead = new DockPanel { Margin = new Thickness(0, 14, 0, 4) };
+            var addApp = new Button { Content = "Add an app", Style = (Style)FindResource("Btn") }; addApp.Click += (s, e) => AddLauncher();
+            DockPanel.SetDock(addApp, Dock.Right); appsHead.Children.Add(addApp);
+            appsHead.Children.Add(new TextBlock { Text = "Apps your phone can open", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+            sp.Children.Add(appsHead);
+            appsList = new StackPanel(); sp.Children.Add(appsList); RefreshApps();
             log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
             sp.Children.Add(log);
             // v1.3: how to turn on HTTPS (shown in Tailscale mode until a certificate is in place)
@@ -270,6 +277,47 @@ namespace HallowRemote
             tray.MouseClick += (s, e) => { if (e.Button == WF.MouseButtons.Left) ShowFromTray(); };
         }
         public void ShowFromTray() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
+        // ---- v1.8: the list of apps the phone may open
+        StackPanel appsList;
+        void RefreshApps()
+        {
+            appsList.Children.Clear();
+            List<Launcher> list; lock (S) list = S.Launchers.ToList();
+            if (list.Count == 0) appsList.Children.Add(new TextBlock { Text = "None yet - add a game launcher, Spotify, Discord... They show up on your phone under Open on your PC.", Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap });
+            foreach (var l in list)
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) }; var item = l;
+                var rm = new Button { Content = "Remove", Style = (Style)FindResource("Btn"), Padding = new Thickness(10, 3, 10, 3) };
+                rm.Click += (s, e) => { lock (S) { S.Launchers.Remove(item); S.Save(); } RefreshApps(); server.Changed(); };
+                DockPanel.SetDock(rm, Dock.Right); row.Children.Add(rm);
+                var tb = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+                tb.Inlines.Add(new System.Windows.Documents.Run(l.Name) { FontWeight = FontWeights.SemiBold });
+                tb.Inlines.Add(new System.Windows.Documents.Run("   " + l.Path) { Foreground = (Brush)FindResource("Muted"), FontSize = 11 });
+                row.Children.Add(tb); appsList.Children.Add(row);
+            }
+        }
+        void AddLauncher()
+        {
+            var dlg = new OpenFileDialog { Title = "Pick an app your phone may open", Filter = "Apps and shortcuts (*.exe;*.lnk;*.url)|*.exe;*.lnk;*.url", InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu) };
+            if (dlg.ShowDialog(this) != true) return;
+            AddLauncherPath(dlg.FileName);
+        }
+        public void AddLauncherPath(string path)
+        {
+            var ext = System.IO.Path.GetExtension(path).ToLowerInvariant(); if (ext != ".exe" && ext != ".lnk" && ext != ".url") return;
+            string name = null;
+            try { if (ext == ".exe") name = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).FileDescription; } catch { }
+            if (string.IsNullOrWhiteSpace(name)) name = System.IO.Path.GetFileNameWithoutExtension(path);
+            if (name.Length > 40) name = name.Substring(0, 40);
+            lock (S)
+            {
+                if (S.Launchers.Count >= 20) { state.Text = "That's 20 apps - remove one first."; return; }
+                if (S.Launchers.Any(x => string.Equals(x.Path, path, StringComparison.OrdinalIgnoreCase))) return;
+                S.Launchers.Add(new Launcher { Id = RemoteSettings.NewCode().Substring(0, 8), Name = name, Path = path }); S.Save();
+            }
+            RefreshApps(); server.Changed();
+        }
+
         // ---- v1.7: updates from GitHub (asks first; the download is checked against GitHub's SHA-256)
         Button updateBtn; TextBlock inputWarn; GhRelease pending;
         void CheckForUpdate(bool manual)
