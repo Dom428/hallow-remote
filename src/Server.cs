@@ -32,7 +32,9 @@ namespace HallowRemote
         [DataMember] public bool UseHallowIcon = true;   // v1.4: hide this tray icon while Hallow Hub hosts the one Hallow icon
         [DataMember] public bool UseHallowAccent = true;   // v1.5: the colour picked in Hallow Toolkit
         [DataMember] public string LastCrashShown = "";    // v1.5: the crash report the notice was last shown for (a file name)
-        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; }
+        [DataMember] public List<MyButton> Buttons = new List<MyButton>();   // v1.6: the phone's "My buttons" (only ids from the fixed action list)
+        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); }
+        [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
         public static string Dir { get { return TestDir != null ? Path.Combine(TestDir, "HallowRemote") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
@@ -46,16 +48,31 @@ namespace HallowRemote
             if (string.IsNullOrEmpty(s.Code)) { s.Code = NewCode(); s.Save(); }
             return s;
         }
+        static readonly object saveLock = new object();
         public void Save()
         {
             if (Frozen) return;
-            try { Directory.CreateDirectory(Dir); using (var f = File.Create(FilePath)) new DataContractJsonSerializer(typeof(RemoteSettings)).WriteObject(f, this); } catch { }
+            lock (saveLock)   // v1.6: written to a temp file first, so the link's code can never be lost half-way
+                try
+                {
+                    Directory.CreateDirectory(Dir); var tmp = FilePath + ".tmp";
+                    using (var f = File.Create(tmp)) new DataContractJsonSerializer(typeof(RemoteSettings)).WriteObject(f, this);
+                    if (File.Exists(FilePath)) File.Replace(tmp, FilePath, null); else File.Move(tmp, FilePath);
+                }
+                catch { }
         }
         public static string NewCode()
         {
             const string a = "abcdefghjkmnpqrstuvwxyz23456789"; var b = new byte[14]; using (var r = RandomNumberGenerator.Create()) r.GetBytes(b);
             return new string(b.Select(x => a[x % a.Length]).ToArray());
         }
+    }
+
+    [DataContract]
+    public class MyButton
+    {
+        [DataMember] public string Id = "";      // an action id from Server.Catalog (e.g. "mic", "mute:game", "power:sleep")
+        [DataMember] public string Label = "";   // your own name for it
     }
 
     public static class Net
@@ -203,6 +220,7 @@ namespace HallowRemote
                     "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
                 else if (rest == "/api/do") { var res = Do(q); Changed(); Send(st, 200, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest == "/api/buttons") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Buttons(q)));
                 else if (rest == "/api/wait") { client.SendTimeout = 10000; Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Wait(q))); }
                 else if (rest.StartsWith("/api/cover/")) { int i; var img = int.TryParse(rest.Substring(11), out i) ? Cover(i) : null; if (img != null) Send(st, 200, "image/jpeg", img, true); else Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("No cover")); }
                 else if (rest.StartsWith("/api/clip/") || rest.StartsWith("/api/thumb/"))
@@ -395,8 +413,78 @@ namespace HallowRemote
         static Dictionary<string, object> Overlay()
         {
             var s = Family.Status("Overlay"); if (s == null) return null;
-            return new Dictionary<string, object> { { "visible", Get(s, "visible") is bool && (bool)Get(s, "visible") } };
+            var o = new Dictionary<string, object> { { "visible", Get(s, "visible") is bool && (bool)Get(s, "visible") } };
+            // v1.6: live numbers, if this Overlay reports them (top level or under "live"): fps, ping, server region
+            var live = Get(s, "live") as Dictionary<string, object> ?? s;
+            object fps = Get(live, "fps"), ping = Get(live, "ping"), region = Get(live, "region") ?? Get(live, "server");
+            if (fps != null || ping != null || region != null) o["live"] = new Dictionary<string, object> { { "fps", fps == null ? null : (object)Math.Round(Num(fps)) }, { "ping", ping == null ? null : (object)Math.Round(Num(ping)) }, { "region", region as string }, { "game", Get(live, "game") as string } };
+            // and its last match summary (Overlay 1.7+)
+            var ms = List(s, "matches"); var m = ms.Count > 0 ? ms[0] as Dictionary<string, object> : null;
+            if (m != null) o["lastMatch"] = new Dictionary<string, object> { { "game", Get(m, "game") as string }, { "when", When(Get(m, "end")) }, { "minutes", Num(Get(m, "minutes")) },
+                { "fps", Get(m, "fps") == null ? null : (object)Num(Get(m, "fps")) }, { "ping", Get(m, "ping") == null ? null : (object)Num(Get(m, "ping")) }, { "stalls", Num(Get(m, "stalls")) }, { "summary", Get(m, "summary") as string } };
+            return o;
         }
+
+        // ---- v1.6: My buttons - your own grid, made only from the fixed actions below (choose, order, rename; nothing new)
+        static readonly string[] ChannelNames = { "game", "chat", "music", "media", "other" };
+        public List<Dictionary<string, object>> Catalog()
+        {
+            var c = new List<Dictionary<string, object>>();
+            Action<string, string, string> add = (id, label, group) => c.Add(new Dictionary<string, object> { { "id", id }, { "label", label }, { "group", group }, { "danger", id.StartsWith("power:") } });
+            add("mic", "Mic mute", "Hallow Mixer");
+            foreach (var ch in ChannelNames) add("mute:" + ch, "Mute " + (ch == "other" ? "system" : ch), "Hallow Mixer");
+            add("media:playpause", "Play / pause", "Hallow Mixer"); add("media:next", "Next track", "Hallow Mixer"); add("media:prev", "Previous track", "Hallow Mixer");
+            var mx = Mixer("/state"); var presets = mx == null ? null : Get(mx, "presets") as System.Collections.ArrayList;
+            if (presets != null) foreach (var p in presets) { var n = p as string; if (n != null && n.Length < 60) add("preset:" + n, "Preset " + n, "Hallow Mixer"); }
+            add("session", "Game session on / off", "Hallow Toolkit");
+            add("clip", "Save clip", "Hallow Clips"); add("backup", "Back up now", "Hallow Vault");
+            add("overlay:show", "Show overlay", "Hallow Overlay"); add("overlay:hide", "Hide overlay", "Hallow Overlay");
+            add("power:sleep", "Sleep", "This PC"); add("power:shutdown", "Shut down", "This PC"); add("power:lock", "Lock", "This PC");
+            return c;
+        }
+        // an action id -> the same query the normal buttons send (null = not one of the fixed actions)
+        static Dictionary<string, string> ActionQuery(string id)
+        {
+            if (id == null) return null;
+            var q = new Dictionary<string, string>(); int c = id.IndexOf(":"); var kind = c < 0 ? id : id.Substring(0, c); var arg = c < 0 ? "" : id.Substring(c + 1);
+            switch (kind)
+            {
+                case "mic": case "session": case "clip": case "backup": if (c >= 0) return null; q["a"] = kind; return q;
+                case "mute": if (!Channels.Contains(arg)) return null; q["a"] = "mute"; q["ch"] = arg; return q;
+                case "media": if (arg != "playpause" && arg != "next" && arg != "prev") return null; q["a"] = "media"; q["do"] = arg; return q;
+                case "preset": if (arg.Length == 0 || arg.Length >= 60) return null; q["a"] = "preset"; q["name"] = arg; return q;
+                case "overlay": if (arg != "show" && arg != "hide") return null; q["a"] = "overlay"; q["do"] = arg; return q;
+                case "power": if (arg != "sleep" && arg != "shutdown" && arg != "lock") return null; q["a"] = "power"; q["do"] = arg; return q;
+            }
+            return null;
+        }
+        // GET api/buttons: the catalog and your grid; api/buttons?set=<json [{id,label}]> saves it (checked against the fixed list)
+        string Buttons(Dictionary<string, string> q)
+        {
+            string set; string msg = null;
+            if (q.TryGetValue("set", out set))
+            {
+                try
+                {
+                    var raw = js.DeserializeObject(set) as object[]; if (raw == null) throw new Exception("Expected a list of buttons");
+                    var list = raw.Select(x => x as Dictionary<string, object> ?? new Dictionary<string, object>()).ToList();
+                    if (list.Count > 24) throw new Exception("At most 24 buttons");
+                    var mine = new List<MyButton>();
+                    foreach (var b in list)
+                    {
+                        var id = Get(b, "id") as string; var label = (Get(b, "label") as string ?? "").Trim();
+                        if (ActionQuery(id) == null) throw new Exception("Not one of the actions");
+                        label = new string(label.Where(ch => !char.IsControl(ch)).ToArray()); if (label.Length > 24) label = label.Substring(0, 24);
+                        mine.Add(new MyButton { Id = id, Label = label });
+                    }
+                    lock (S) { S.Buttons = mine; S.Save(); }
+                    msg = "Saved"; Changed();
+                }
+                catch (Exception e) { return js.Serialize(new Dictionary<string, object> { { "ok", false }, { "msg", e.Message } }); }
+            }
+            return js.Serialize(new Dictionary<string, object> { { "ok", true }, { "msg", msg }, { "catalog", Catalog() }, { "mine", MineJson() } });
+        }
+        List<object> MineJson() { lock (S) return S.Buttons.Select(b => (object)new Dictionary<string, object> { { "id", b.Id }, { "label", b.Label }, { "danger", b.Id.StartsWith("power:") } }).ToList(); }
 
         string State() { return js.Serialize(StateObj()); }
         Dictionary<string, object> StateObj()
@@ -414,6 +502,7 @@ namespace HallowRemote
                 { "hub", hub != null }, { "games", games },
                 { "session", SessionOn() },
                 { "clips", Clips() }, { "vault", Vault() }, { "overlay", Overlay() },
+                { "buttons", MineJson() },   // v1.6
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;
@@ -440,7 +529,7 @@ namespace HallowRemote
             {
                 lastWaiter = DateTime.UtcNow;
                 if (!watching) { watching = true; new Thread(Watch) { IsBackground = true, Name = "live" }.Start(); new Thread(WatchMixer) { IsBackground = true, Name = "live mixer" }.Start(); }
-                if (want == rev) Monitor.Wait(live, 3000);
+                if (want == rev) Monitor.Wait(live, q.ContainsKey("fast") ? 1000 : 3000);   // v1.6: the live stats page asks every second
             }
             return Snapshot();
         }
@@ -530,6 +619,14 @@ namespace HallowRemote
                     string d; q.TryGetValue("do", out d); if (d != "show" && d != "hide") break;
                     var r = Family.Send("Overlay", d, 5000);
                     msg = Family.Error(r, "Hallow Overlay isn't running") ?? (d == "show" ? "Overlay shown" : "Overlay hidden"); break;
+                }
+                case "btn":   // v1.6: one of My buttons - runs its fixed action, nothing else
+                {
+                    int i; MyButton b = null;
+                    lock (S) if (int.TryParse(q.ContainsKey("i") ? q["i"] : "", out i) && i >= 0 && i < S.Buttons.Count) b = S.Buttons[i];
+                    var aq = b == null ? null : ActionQuery(b.Id);
+                    if (aq == null) break;
+                    return Do(aq);
                 }
                 case "power":
                 {

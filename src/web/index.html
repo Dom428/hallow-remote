@@ -41,12 +41,22 @@ input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}
 .vg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #2e2639;font-size:14px}.vg:first-of-type{border-top:0}.vg span{color:#8f88a0;font-size:13px;text-align:right}
 .power{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.power .btn{padding:14px 6px}
 .btn:disabled{opacity:.55}
+.tabs{display:flex;gap:6px;margin:0 0 14px}.tabs button{flex:1;border:0;border-radius:12px;padding:9px 6px;background:#211b2a;color:#8f88a0;font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
+.big{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.big .stat{padding:18px 8px}.big .stat b{font-size:34px;font-weight:700}.big .stat small{font-size:13px}
+.src{color:#8f88a0;font-size:12px;margin:10px 2px 0}
+.mine{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.mine .btn{padding:20px 8px;font-size:15px;min-height:72px}
+.ed{display:flex;gap:6px;align-items:center;margin:8px 0}.ed input{flex:1;min-width:0;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit}.ed small{color:#8f88a0;font-size:11px;display:block}
+select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit;flex:1;min-width:0}
 #player{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:5}
 #player video{flex:1;width:100%;min-height:0;background:#000}
 #player .bar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#ece8f4}
 </style></head>
 <body>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
+<div class="tabs"><button id="t_home" class="on" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Live stats</button><button id="t_mine" onclick="tab('mine')">My buttons</button></div>
+<div id="v_live" style="display:none"><div class="big" id="bigstats"></div><div class="src" id="livesrc"></div><div id="lastmatch"></div></div>
+<div id="v_mine" style="display:none"><div class="mine" id="minegrid"></div><div id="mineedit"></div><button class="btn" style="width:100%;margin-top:14px" id="editbtn" onclick="toggleEdit()">Edit my buttons</button></div>
+<div id="v_home">
 <div class="stats" id="stats"></div>
 <button class="mic" id="mic" style="display:none" onclick="act('a=mic')">Mic</button>
 <div id="np"></div>
@@ -57,6 +67,7 @@ input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}
 <div id="vault"></div>
 <div id="overlay"></div>
 <h2>This PC</h2><div class="power"><button class="btn" id="pw_sleep" onclick="power('sleep')">Sleep</button><button class="btn" id="pw_shutdown" onclick="power('shutdown')">Shut down</button><button class="btn" id="pw_lock" onclick="power('lock')">Lock</button></div>
+</div>
 <div id="player"><div class="bar"><b id="ptitle"></b><button class="btn" onclick="closePlayer()">Close</button></div><video id="video" controls playsinline preload="metadata"></video></div>
 <div id="toast"></div>
 <script>
@@ -73,6 +84,7 @@ var timers = {};
 function slide(ch, v) { el('p_' + ch).textContent = v + '%'; clearTimeout(timers[ch]); timers[ch] = setTimeout(function () { act('a=set&ch=' + ch + '&v=' + v, true); }, 150); }
 function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cls || '') + '">' + (v < 0 ? '-' : v + unit) + '</b><small>' + label + '</small></div>'; }
 function render(s) {
+  if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s);
   if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
   el('pc').textContent = s.pc; el('time').textContent = s.time;
   var t = s.stats, ram = t.ramTotal > 0 ? t.ramUsed / t.ramTotal : 0;
@@ -152,6 +164,67 @@ function power(what) {
   clearTimeout(armed[what]); armed[what] = 0; b.className = 'btn'; b.textContent = powerText[what];
   act('a=power&do=' + what);
 }
+// ---- v1.6: tabs, Live stats, My buttons
+var view = 'home', editing = false, catalog = [], mine = [];
+function tab(v) {
+  view = v; ['home', 'live', 'mine'].forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
+  if (v == 'mine' && !catalog.length) loadButtons();
+  if (last) render(last);
+  if (!polling) { rev = 0; live(); }   // the live stats page asks every second
+}
+function renderLive(s) {
+  var t = s.stats, o = s.overlay, lv = o && o.live, h = '';
+  if (lv && lv.fps != null) h += stat('FPS', lv.fps, '', lv.fps < 30 ? 'bad' : lv.fps < 60 ? 'warn' : '');
+  if (lv && lv.ping != null) h += stat('Ping', lv.ping, ' ms', lv.ping > 120 ? 'bad' : lv.ping > 70 ? 'warn' : '');
+  if (lv && lv.region) h += '<div class="stat"><b style="font-size:22px">' + esc(lv.region) + '</b><small>Server</small></div>';
+  h += stat('CPU', t.cpu, '%', t.cpu > 90 ? 'warn' : '') + stat('GPU', t.gpu, '%') + stat('GPU temp', t.gpuTemp, '&deg;', t.gpuTemp >= 85 ? 'bad' : t.gpuTemp >= 78 ? 'warn' : '') +
+    stat('RAM', t.ramUsed < 0 ? -1 : t.ramUsed, ' GB');
+  el('bigstats').innerHTML = h;
+  el('livesrc').textContent = lv ? 'Game numbers from Hallow Overlay' + (lv.game ? ' - ' + lv.game : '') + ', PC numbers from Hallow Remote.' :
+    o ? 'PC numbers from Hallow Remote. Hallow Overlay is running but isn\'t sharing live game numbers.' : 'PC numbers from Hallow Remote. Start Hallow Overlay for game numbers.';
+  var m = o && o.lastMatch;
+  el('lastmatch').innerHTML = !m ? '' : '<h2>Last match</h2><div class="card"><b>' + esc(m.game || 'Game') + '</b><div class="sub">' + esc([m.when, m.minutes ? Math.round(m.minutes) + ' min' : '',
+    m.fps != null ? Math.round(m.fps) + ' fps average' : '', m.ping != null ? Math.round(m.ping) + ' ms ping' : '', m.stalls ? m.stalls + ' stalls' : ''].filter(Boolean).join(' - ')) + '</div>' +
+    (m.summary ? '<div style="margin-top:6px">' + esc(m.summary) + '</div>' : '') + '</div>';
+}
+function renderMine(s) {
+  mine = s.buttons || mine; if (editing) return;
+  var mk = JSON.stringify(mine) + catalog.length; if (mk === lastMine || Object.keys(armedMine).some(function (k) { return armedMine[k]; })) return; lastMine = mk;
+  el('minegrid').innerHTML = mine.length ? mine.map(function (b, i) {
+    return '<button class="btn' + (b.danger ? '' : ' go') + '" id="mb_' + i + '" onclick="pressMine(' + i + ')">' + esc(b.label || labelOf(b.id)) + '</button>';
+  }).join('') : '<div class="card off" style="grid-column:1/-1">No buttons yet - tap Edit to pick some from the actions you already have.</div>';
+}
+function labelOf(id) { for (var i = 0; i < catalog.length; i++) if (catalog[i].id == id) return catalog[i].label; return id; }
+var armedMine = {}, lastMine = '';
+function pressMine(i) {
+  var b = mine[i], btn = el('mb_' + i);
+  if (b.danger && !armedMine[i]) {   // power buttons keep their confirm tap
+    var text = btn.textContent; btn.className = 'btn on'; btn.textContent = 'Tap again';
+    armedMine[i] = setTimeout(function () { armedMine[i] = 0; btn.className = 'btn'; btn.textContent = text; }, 4000); return;
+  }
+  if (armedMine[i]) { clearTimeout(armedMine[i]); armedMine[i] = 0; lastMine = ''; renderMine({ buttons: mine }); }
+  act('a=btn&i=' + i);
+}
+function loadButtons(set) {
+  return fetch(base + 'api/buttons' + (set ? '?set=' + encodeURIComponent(JSON.stringify(set)) : ''), { cache: 'no-store' }).then(function (r) { return r.json(); })
+    .then(function (j) { if (!j.ok) { toast(j.msg); return; } catalog = j.catalog; mine = j.mine; if (set) toast('Saved'); if (editing) renderEdit(); else { lastMine = ''; renderMine({ buttons: mine }); } })
+    .catch(function () { toast('Your PC didn\'t answer'); });
+}
+function toggleEdit() { editing = !editing; el('editbtn').textContent = editing ? 'Done' : 'Edit my buttons'; if (editing) { el('minegrid').innerHTML = ''; loadButtons(); } else { el('mineedit').innerHTML = ''; lastMine = ''; renderMine({ buttons: mine }); } }
+function renderEdit() {
+  var groups = {}; catalog.forEach(function (c) { (groups[c.group] = groups[c.group] || []).push(c); });
+  el('mineedit').innerHTML = mine.map(function (b, i) {
+    return '<div class="ed"><div style="flex:1;min-width:0"><input value="' + esc(b.label) + '" placeholder="' + esc(labelOf(b.id)) + '" maxlength="24" onchange="renameMine(' + i + ',this.value)"><small>' + esc(labelOf(b.id)) + '</small></div>' +
+      '<button class="btn" onclick="moveMine(' + i + ',-1)">&#8593;</button><button class="btn" onclick="moveMine(' + i + ',1)">&#8595;</button><button class="btn" onclick="removeMine(' + i + ')">&#10005;</button></div>';
+  }).join('') + '<div class="ed"><select id="addsel">' + Object.keys(groups).map(function (g) {
+    return '<optgroup label="' + esc(g) + '">' + groups[g].map(function (c) { return '<option value="' + esc(c.id) + '">' + esc(c.label) + '</option>'; }).join('') + '</optgroup>';
+  }).join('') + '</select><button class="btn go" onclick="addMine()">Add</button></div>';
+}
+function saveMine() { loadButtons(mine.map(function (b) { return { id: b.id, label: b.label || '' }; })); }
+function renameMine(i, v) { mine[i].label = v.trim(); saveMine(); }
+function moveMine(i, d) { var j = i + d; if (j < 0 || j >= mine.length) return; var x = mine[i]; mine[i] = mine[j]; mine[j] = x; saveMine(); }
+function removeMine(i) { mine.splice(i, 1); saveMine(); }
+function addMine() { var id = el('addsel').value; if (!id) return; if (mine.length >= 24) { toast('At most 24 buttons'); return; } mine.push({ id: id, label: '' }); saveMine(); }
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })
@@ -164,7 +237,7 @@ function live() {
   var run = ++liveRun;
   (function next() {
     if (run !== liveRun || document.hidden) return;
-    fetch(base + 'api/wait?rev=' + rev, { cache: 'no-store' }).then(function (r) { if (r.status == 404) throw 'old'; return r.json(); })
+    fetch(base + 'api/wait?rev=' + rev + (view == 'live' ? '&fast=1' : ''), { cache: 'no-store' }).then(function (r) { if (r.status == 404) throw 'old'; return r.json(); })
       .then(function (s) { if (run !== liveRun) return; rev = s.rev; last = s; render(s); next(); })
       .catch(function (e) {
         if (e === 'old') { liveRun++; polling = true; load(); setInterval(function () { if (!document.hidden) load(); }, 2500); return; }

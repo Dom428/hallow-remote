@@ -7,6 +7,10 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.6
+- Live stats: big numbers on your phone (FPS, ping and server from Hallow Overlay, PC stats).
+- My buttons: your own grid of the actions Remote already has.
+
 WHAT'S NEW IN 1.5
 - The Hallow accent: the colour you pick in Hallow Toolkit, here and on your phone.
 - Crash reports kept on this PC (never sent anywhere), with a notice next time.
@@ -38,6 +42,8 @@ ON YOUR PHONE
 - Hallow Vault: back up now, last backup per game
 - Hallow Overlay: show / hide
 - This PC: sleep, shut down, lock (tap twice to confirm)
+- Live stats: big numbers - FPS, ping and server from Hallow Overlay, and your PC's stats
+- My buttons: your own grid of the actions above (choose, order, rename)
 - Your PC: CPU, GPU, GPU temperature, RAM
 
 REACHING YOUR PC
