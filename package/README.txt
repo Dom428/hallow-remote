@@ -7,6 +7,11 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.4
+- One Hallow icon: with Hallow Hub 2.4+ running, Remote lives in the Hallow icon's menu
+  (Show the phone code, Copy link, Pause the remote). Setting: Use the Hallow icon.
+- Pause the remote from the tray menu.
+
 WHAT'S NEW IN 1.3
 - Live updates: the phone changes as soon as something changes on your PC.
 - Optional HTTPS with Tailscale's certificate for your PC - the window shows how.

@@ -1,6 +1,7 @@
 ﻿// Hallow Remote - your phone as a remote for the Hallow apps: Mixer sliders and mic, Hub games, Clips, Vault, Overlay, Toolkit game session, PC stats and power.
 // The PC side is this small tray app; the phone side is a web page you add to your home screen.
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -19,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.3";
+        public const string Version = "1.4";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -63,7 +64,7 @@ namespace HallowRemote
 
         readonly RemoteSettings S = RemoteSettings.Load();
         readonly Server server;
-        readonly bool startHidden; bool exiting, toldTray;
+        readonly bool startHidden; bool exiting, toldTray, paused, hubHosts, balloonOwn;
         Image qr; TextBlock link, state, log, httpsText; TextBox httpsCmd; Border httpsNote; WF.NotifyIcon tray; StackPanel netChips;
 
         public MainWindow(bool hidden)
@@ -80,20 +81,22 @@ namespace HallowRemote
                 if (!exiting && S.TrayOnClose && !Snap.On)
                 {
                     e.Cancel = true; Hide();
-                    if (!toldTray && tray != null) { toldTray = true; tray.ShowBalloonTip(4000, "Hallow Remote", "Still running, so your phone can reach your PC. Right-click the icon to quit.", WF.ToolTipIcon.None); }
+                    if (!toldTray && tray != null) { toldTray = true; Notify("Hallow Remote", hubHosts ? "Still running, so your phone can reach your PC. It's in the Hallow icon's menu." : "Still running, so your phone can reach your PC. Right-click the icon to quit."); }
                 }
                 else Quit();
             };
             server.Log = m => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  From your phone: " + m));
-            if (!Snap.On) { server.Start(); SetupTray(); Family.Serve("Remote", server.Command); }
+            if (!Snap.On) { server.Start(); SetupTray(); Family.Serve("Remote", Command); }
             else { server.Address = "100.90.88.26"; }
             ShowLink();
             if (!Snap.On)
             {
                 // Tailscale can connect after Windows starts: try again every 30 s until it's up
                 var retry = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-                retry.Tick += (s, e) => { if (server.Address == null || server.Error != null || Tls.Stamp() != server.TlsStamp) { server.Start(); ShowLink(); } };   // v1.3: also picks up a new or renewed HTTPS certificate
+                retry.Tick += (s, e) => { if (!paused && (server.Address == null || server.Error != null || Tls.Stamp() != server.TlsStamp)) { server.Start(); ShowLink(); } };   // v1.3: also picks up a new or renewed HTTPS certificate
                 retry.Start();
+                // v1.4: one Hallow icon - every 5 s ask Hallow Hub whether it hosts the tray menu; hide this icon while it does
+                var host = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; host.Tick += (s, e) => CheckHost(); host.Start(); CheckHost();
                 if (!startHidden) Show();
             }
         }
@@ -158,6 +161,7 @@ namespace HallowRemote
             };
             sw("Keep running in the tray when I close this window", S.TrayOnClose, v => S.TrayOnClose = v);
             sw("Start with Windows (in the tray)", StartsWithWindows(), v => SetStartWithWindows(v));
+            sw("Use the Hallow icon (when Hallow Hub runs, Hallow Remote lives in its tray menu instead of having its own icon)", S.UseHallowIcon, v => { S.UseHallowIcon = v; CheckHost(); });
             sp.Children.Add(more);
             log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
             sp.Children.Add(log);
@@ -187,6 +191,7 @@ namespace HallowRemote
             state.Text = server.Error ?? (S.Network == "lan" ? "Ready on your home network. Your phone has to be on the same Wi-Fi." : "Ready through Tailscale - works wherever your phone has Tailscale on.");
             state.Foreground = server.Error != null ? B("#F0BE5A") : B("#6ED28C");
             if (server.Error == null && server.Https) state.Text = "Ready through Tailscale, with HTTPS (certificate good until " + server.CertUntil.ToString("d MMM yyyy") + ").";
+            if (paused) { state.Text = "Paused - your phone can't reach this PC until you resume it (tray menu)."; state.Foreground = B("#F0BE5A"); }
             ShowHttpsNote(Tls.TailscaleName(), server.TlsProblem);
         }
         void ShowHttpsNote(string name, string problem)
@@ -222,6 +227,9 @@ namespace HallowRemote
             try { tray.Icon = System.Drawing.Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location); } catch { tray.Icon = System.Drawing.SystemIcons.Application; }
             var menu = new WF.ContextMenuStrip();
             var open = new WF.ToolStripMenuItem("Show the phone code"); open.Font = new System.Drawing.Font(open.Font, System.Drawing.FontStyle.Bold); open.Click += (s, e) => ShowFromTray(); menu.Items.Add(open);
+            var copy = new WF.ToolStripMenuItem("Copy link"); copy.Click += (s, e) => Invoke("copy"); menu.Items.Add(copy);
+            var pause = new WF.ToolStripMenuItem("Pause the remote"); pause.Click += (s, e) => Invoke("pause"); menu.Items.Add(pause);
+            menu.Opening += (s, e) => { pause.Checked = paused; copy.Enabled = server.Link != null && !paused; };
             menu.Items.Add(new WF.ToolStripSeparator());
             var quit = new WF.ToolStripMenuItem("Quit"); quit.Click += (s, e) => Quit(); menu.Items.Add(quit);
             tray.ContextMenuStrip = menu;
@@ -229,6 +237,96 @@ namespace HallowRemote
         }
         public void ShowFromTray() { Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
         void Quit() { exiting = true; server.Stop(); if (tray != null) { tray.Visible = false; tray.Dispose(); } Application.Current.Shutdown(); }
+
+        // ---- v1.4: one Hallow icon (Hallow Hub hosts the tray menu). The link and its code never go over the pipe:
+        // "Copy link" runs here and puts the link on this PC's clipboard.
+        string Command(string line)
+        {
+            int sp = line.IndexOf(' '); var cmd = sp < 0 ? line : line.Substring(0, sp); var arg = sp < 0 ? "" : line.Substring(sp + 1).Trim();
+            switch (cmd)
+            {
+                case "open": return OnUi(() => { ShowFromTray(); return "ok"; });
+                case "menu": return OnUi(() => "ok " + Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "items", MenuItems() } }));
+                case "invoke": return OnUi(() => Invoke(arg));
+                case "quit":
+                    new Thread(() => { Thread.Sleep(300); Dispatcher.BeginInvoke(new Action(Quit)); }) { IsBackground = true }.Start();   // after the reply is sent
+                    return "ok";
+                default: return server.Command(line);
+            }
+        }
+        string OnUi(Func<string> f)
+        {
+            string r = "error no answer in time";
+            var op = Dispatcher.BeginInvoke(new Action(() => { try { r = f(); } catch (Exception e) { r = "error " + Family.OneLine(e.Message); } }));
+            return op.Wait(TimeSpan.FromSeconds(5)) == DispatcherOperationStatus.Completed ? r : "error no answer in time";
+        }
+        List<object> MenuItems()
+        {
+            return new List<object> {
+                new Dictionary<string, object> { { "id", "show" }, { "label", "Show the phone code" } },
+                new Dictionary<string, object> { { "id", "copy" }, { "label", "Copy link" }, { "enabled", server.Link != null && !paused } },
+                new Dictionary<string, object> { { "id", "-" } },
+                new Dictionary<string, object> { { "id", "pause" }, { "label", "Pause the remote" }, { "checked", paused } } };
+        }
+        string Invoke(string id)
+        {
+            switch (id)
+            {
+                case "show": ShowFromTray(); return "ok";
+                case "copy":
+                    if (server.Link == null || paused) return "error No link right now";
+                    try { Clipboard.SetText(server.Link); } catch { return "error Couldn't use the clipboard"; }
+                    state.Text = "Link copied."; return "ok";
+                case "pause":
+                    paused = !paused; server.Paused = paused;
+                    if (paused) server.Stop(); else server.Start();
+                    server.WriteStatus(); ShowLink();
+                    if (log != null) log.Text = DateTime.Now.ToString("HH:mm") + (paused ? "  Remote paused" : "  Remote on again");
+                    return "ok";
+            }
+            return "error unknown item";
+        }
+        // asks Hub (in the background) whether it hosts the tray menu; shows this icon again if Hub is gone, says no or doesn't answer
+        void CheckHost()
+        {
+            if (tray == null) return;
+            if (!S.UseHallowIcon) { SetHosted(false); return; }
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                bool on = false;
+                try
+                {
+                    var r = Family.Send("Hub", "tray-host", 1500);
+                    if (r != null && r.StartsWith("ok {")) { var d = new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<Dictionary<string, object>>(r.Substring(3)); object o; on = d.TryGetValue("on", out o) && o is bool && (bool)o; }
+                }
+                catch { }
+                Dispatcher.BeginInvoke(new Action(() => SetHosted(on && S.UseHallowIcon)));
+            });
+        }
+        void SetHosted(bool on)
+        {
+            hubHosts = on;
+            if (tray != null && !balloonOwn) tray.Visible = !on;
+            if (server.OwnIcon != (tray != null && tray.Visible)) { server.OwnIcon = tray != null && tray.Visible; server.WriteStatus(); }
+        }
+        // a balloon: through Hub's icon while this one is hidden (falls back to this icon for a moment if Hub fails)
+        void Notify(string title, string text)
+        {
+            if (tray == null) return;
+            if (!hubHosts) { tray.ShowBalloonTip(4000, title, text, WF.ToolTipIcon.None); return; }
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                var r = Family.Send("Hub", "notify Remote\t" + title + "\t" + text, 2000);
+                if (Family.Error(r, "no answer") == null) return;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    balloonOwn = true; tray.Visible = true; tray.ShowBalloonTip(4000, title, text, WF.ToolTipIcon.None);
+                    var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+                    t.Tick += (s, e) => { t.Stop(); balloonOwn = false; SetHosted(hubHosts); };
+                    t.Start();
+                }));
+            });
+        }
 
         public void SnapAll(string dir)
         {

@@ -8,15 +8,12 @@
 | **1.1** | QR code checked against the QR standard (format bits, Reed-Solomon, version choice) and given the lowest-penalty mask; Home Wi-Fi mode skips VPN / WSL / Hyper-V adapters and prefers the one with your router |
 | **1.2** | Hallow Clips (save a clip, newest clips, watch them on the phone with seeking), Hallow Vault (back up now, last backup per game), Hallow Overlay (show / hide), sleep / shut down / lock with a confirm tap; Remote's own family pipe (ping, status) and `--cmd` |
 | **1.3** | Live updates (long poll, woken at once by Hallow Mixer's own long poll, by phone actions, or a 1 s check of the other apps); HTTPS with Tailscale's certificate when its files are in the tls folder (one port, plain links forward to https), with the steps in the PC window |
+| **1.4** | One Hallow icon: pipe `open` / `menu` (Show the phone code, Copy link, Pause the remote) / `invoke` / `quit`; "Use the Hallow icon" (default on) hides Remote's tray icon while Hub answers `tray-host` on:true and shows it again otherwise; balloons through Hub `notify`; the link and code never cross the pipe |
 
 ## Next
 
-### 1.4 - One Hallow icon
-- Hallow Hub hosts one tray icon for the family: Remote answers `open`, `menu` (Show the phone code, Copy link, Pause the remote), `invoke` and `quit` on its pipe - never the link or its code
-- "Use the Hallow icon" setting (on by default): Remote hides its own tray icon while Hub hosts the menu, and shows it again when Hub doesn't
-- Remote's messages go through Hub's icon while its own is hidden
-
 ### Still to check by hand
+- One Hallow icon with the real Hallow Hub 2.4 (tested against a fake Hub pipe)
 - HTTPS with a real Tailscale certificate on a real phone (tested with self-signed EC and RSA certificates only; needs HTTPS turned on in the Tailscale admin console)
 - Scan the QR code with a real phone over Tailscale (the encoder passes an independent decoder, but no camera has read it yet)
 - Use it from the phone on home Wi-Fi and check the Windows firewall question (whether Windows asks, and that private networks is enough)

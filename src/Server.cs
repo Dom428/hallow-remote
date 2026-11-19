@@ -29,7 +29,8 @@ namespace HallowRemote
         [DataMember] public string Network = "tailscale";   // tailscale (anywhere, through Tailscale) or lan (home network only)
         [DataMember] public int Port = 5480;
         [DataMember] public bool TrayOnClose = true;
-        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; }
+        [DataMember] public bool UseHallowIcon = true;   // v1.4: hide this tray icon while Hallow Hub hosts the one Hallow icon
+        [OnDeserializing] void D(StreamingContext c) { Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
         public static string Dir { get { return TestDir != null ? Path.Combine(TestDir, "HallowRemote") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "HallowRemote"); } }
@@ -134,13 +135,14 @@ namespace HallowRemote
             return true;
         }
         bool sampling;
+        public bool Paused, OwnIcon = true;   // v1.4: set by the window (paused from the menu; own tray icon showing)
         public void Stop() { try { if (listener != null) listener.Stop(); } catch { } listener = null; }
 
         // ---- v1.2: Remote in the Hallow family: status for the other apps (never the link's code)
         public string StatusJson()
         {
             return Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version }, { "updated", Family.Time(DateTime.Now) }, { "running", true },
-                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "https", cert != null }, { "httpsProblem", TlsProblem }, { "error", Error } });
+                { "network", S.Network }, { "address", Address }, { "port", S.Port }, { "listening", listener != null }, { "https", cert != null }, { "httpsProblem", TlsProblem }, { "paused", Paused }, { "ownIcon", OwnIcon }, { "error", Error } });
         }
         public void WriteStatus() { if (!Snap.On) Family.WriteStatus(StatusJson()); }
         public string Command(string line)
