@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.8.0.0")]
-[assembly: AssemblyFileVersion("1.8.0.0")]
+[assembly: AssemblyVersion("1.9.0.0")]
+[assembly: AssemblyFileVersion("1.9.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.8";
+        public const string Version = "1.9";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -93,6 +93,15 @@ namespace HallowRemote
                 else Quit();
             };
             Crash.Secret = S.Code;
+            // v1.9: the phone's text goes onto the clipboard on this window's thread; each screen peek is announced on the PC
+            server.SetClipboard = text =>
+            {
+                if (RemoteSettings.TestDir != null) { try { System.IO.File.WriteAllText(System.IO.Path.Combine(RemoteSettings.Dir, "clipboard-test.txt"), text); return true; } catch { return false; } }   // tests never touch the real clipboard
+                bool ok = false;
+                try { Dispatcher.Invoke(new Action(() => { for (int i = 0; i < 5 && !ok; i++) { try { Clipboard.SetText(text); ok = true; } catch { Thread.Sleep(60); } } }), TimeSpan.FromSeconds(3)); } catch { }
+                return ok;
+            };
+            server.Peeked = () => Dispatcher.BeginInvoke(new Action(() => { log.Text = DateTime.Now.ToString("HH:mm") + "  Your phone peeked at the screen"; Notify("Hallow Remote", "Your phone just took a screen peek."); }));
             server.Log = m => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  From your phone: " + m));
             if (!Snap.On) { server.Start(); SetupTray(); Family.Serve("Remote", Command); }
             else { server.Address = "100.90.88.26"; }
@@ -196,6 +205,12 @@ namespace HallowRemote
             inputWarn = new TextBlock { Text = "Anyone with your link can now move the mouse and type on this PC - like sitting at it. Turn it off when you don't need it; Pause the remote also stops it.",
                 Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -2, 0, 6), Visibility = S.AllowInput ? Visibility.Visible : Visibility.Collapsed };
             more.Children.Add(inputWarn);
+            // v1.9: clipboard and screen peek - both off by default
+            sw("Let your phone send text to this PC's clipboard", S.AllowClipboard, v => { S.AllowClipboard = v; S.Save(); server.Changed(); });
+            sw("Let your phone peek at the screen (one picture each time you ask)", S.AllowPeek, v => { S.AllowPeek = v; S.Save(); server.Changed(); peekWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
+            peekWarn = new TextBlock { Text = "Your phone gets a picture of your main screen when you tap Peek - whatever is on it (messages, open documents) is in the picture. This PC tells you each time. Pause the remote also stops it.",
+                Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -2, 0, 6), Visibility = S.AllowPeek ? Visibility.Visible : Visibility.Collapsed };
+            more.Children.Add(peekWarn);
             sp.Children.Add(more);
             // v1.8: apps your phone can open - chosen here only; the phone sees their names, never paths, and can't add any
             var appsHead = new DockPanel { Margin = new Thickness(0, 14, 0, 4) };
@@ -319,7 +334,7 @@ namespace HallowRemote
         }
 
         // ---- v1.7: updates from GitHub (asks first; the download is checked against GitHub's SHA-256)
-        Button updateBtn; TextBlock inputWarn; GhRelease pending;
+        Button updateBtn; TextBlock inputWarn, peekWarn; GhRelease pending;
         void CheckForUpdate(bool manual)
         {
             if (manual) { state.Text = "Checking GitHub for a newer Hallow Remote..."; state.Foreground = (Brush)FindResource("Muted"); }

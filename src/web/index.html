@@ -70,6 +70,8 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 <div id="np"></div>
 <div id="sysmedia"></div>
 <div id="apps"></div>
+<div id="clipcard" style="display:none"><h2>Send to your PC</h2><div class="card"><textarea id="cliptext" rows="3" maxlength="2000" placeholder="Text, a link, a code... it goes on the PC clipboard" style="width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit;resize:vertical"></textarea><button class="btn go" style="width:100%;margin-top:8px" onclick="sendClip()">Copy to the PC clipboard</button></div></div>
+<div id="peekcard" style="display:none"><h2>Screen peek</h2><div class="card"><button class="btn go" style="width:100%" id="peekbtn" onclick="peek()">Peek at the screen</button><a id="peeklink" target="_blank"><img id="peekimg" alt="" style="display:none;width:100%;border-radius:10px;margin-top:10px"></a><div class="sub" style="margin-top:6px">One picture each time you tap. Your PC shows that you looked.</div></div></div>
 <div id="mixer"></div>
 <div id="games"></div>
 <div id="session"></div>
@@ -130,6 +132,7 @@ function render(s) {
       '<span class="p" id="p_sysvol">' + sm.volume + '%</span><button class="btn m' + (sm.muted ? ' on' : '') + '" onclick="act(\'a=volmute\')">' + (sm.muted ? 'Muted' : 'Mute') + '</button></div></div>';
     if (!dragging.sysvol && sh !== lastSys) { lastSys = sh; el('sysmedia').innerHTML = sh; }
   }
+  el('clipcard').style.display = s.clipboard ? '' : 'none'; el('peekcard').style.display = s.peek ? '' : 'none';
   var ak = JSON.stringify(s.apps || []);
   if (ak !== lastApps) { lastApps = ak; el('apps').innerHTML = !(s.apps || []).length ? '' : '<h2>Open on your PC</h2><div class="chips">' + s.apps.map(function (a) { return '<button class="btn" onclick="act(\'a=open&id=' + a.id + '\')">' + esc(a.name) + '</button>'; }).join('') + '</div>'; }
   var gk = JSON.stringify(s.games) + s.hub;
@@ -294,6 +297,16 @@ function sendText(enter) {
 function btnHold(b, e) { e.preventDefault(); holdBtn = b; inp('k=button&b=' + b + '&s=down'); }
 function btnRelease(b, e) { e.preventDefault(); if (holdBtn) inp('k=button&b=' + b + '&s=up'); holdBtn = null; }
 padSetup();
+// ---- v1.9: clipboard and screen peek
+function sendClip() { var v = el('cliptext').value; if (!v) return; act('a=paste&t=' + encodeURIComponent(v.slice(0, 2000))).then(function () { el('cliptext').value = ''; }); }
+var peekUrl = null;
+function peek() {
+  var b = el('peekbtn'); b.disabled = true; b.textContent = 'Taking a picture...';
+  fetch(base + 'api/peek', { cache: 'no-store' }).then(function (r) { if (!r.ok) return r.json().then(function (j) { throw j.msg; }); return r.blob(); })
+    .then(function (bl) { if (peekUrl) URL.revokeObjectURL(peekUrl); peekUrl = URL.createObjectURL(bl); var i = el('peekimg'); i.src = peekUrl; i.style.display = 'block'; el('peeklink').href = peekUrl; })
+    .catch(function (e) { toast(typeof e == 'string' ? e : 'Your PC didn\'t answer'); })
+    .then(function () { b.disabled = false; b.textContent = 'Peek again'; });
+}
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })

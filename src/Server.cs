@@ -36,7 +36,9 @@ namespace HallowRemote
         [DataMember] public bool AllowInput = false;       // v1.7: the phone may move the mouse and type (off by default)
         [DataMember] public string LastUpdateCheck = "";   // v1.7
         [DataMember] public List<Launcher> Launchers = new List<Launcher>();   // v1.8: apps the phone may open (set up on the PC only)
-        [OnDeserializing] void D(StreamingContext c) { Launchers = new List<Launcher>(); Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
+        [DataMember] public bool AllowClipboard = false;   // v1.9: the phone may put text on this PC's clipboard
+        [DataMember] public bool AllowPeek = false;        // v1.9: the phone may take one screenshot when asked
+        [OnDeserializing] void D(StreamingContext c) { Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
         [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); if (Launchers == null) Launchers = new List<Launcher>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
@@ -231,6 +233,12 @@ namespace HallowRemote
                     "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
                 else if (rest == "/api/do") { var res = Do(q); Changed(); Send(st, 200, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest == "/api/peek")   // v1.9: one screenshot, only while the switch on the PC is on
+                {
+                    var img = Peek();
+                    if (img == null) Send(st, 403, "application/json", Encoding.UTF8.GetBytes("{\"ok\":false,\"msg\":\"Screen peek is off - turn it on in Hallow Remote on your PC\"}"));
+                    else { client.SendTimeout = 15000; Send(st, 200, "image/jpeg", img); }
+                }
                 else if (rest == "/api/input") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(InputCmd(q)));
                 else if (rest == "/api/buttons") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Buttons(q)));
                 else if (rest == "/api/wait") { client.SendTimeout = 10000; Send(st, 200, "application/json", Encoding.UTF8.GetBytes(Wait(q))); }
@@ -271,7 +279,7 @@ namespace HallowRemote
         }
         static void Send(Stream st, int code, string type, byte[] body, bool cache = false)
         {
-            var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
+            var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : code == 403 ? " Forbidden" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
                 "\r\nCache-Control: " + (cache ? "max-age=3600" : "no-store") + "\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
             var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length); st.Write(body, 0, body.Length); st.Flush();
         }
@@ -454,6 +462,44 @@ namespace HallowRemote
         }
         static bool Power_DryRun() { return DryRun; }
 
+        // ---- v1.9: clipboard and screen peek (both off by default; the window sets SetClipboard and Peeked)
+        public Func<string, bool> SetClipboard;
+        public Action Peeked;
+        DateTime lastPeek;
+        byte[] Peek()
+        {
+            if (!S.AllowPeek || Paused) return null;
+            lock (live) { if ((DateTime.UtcNow - lastPeek).TotalSeconds < 2) System.Threading.Thread.Sleep(2000); lastPeek = DateTime.UtcNow; }
+            try
+            {
+                System.Drawing.Bitmap shot;
+                if (Input.Test)
+                {
+                    // tests never capture the real screen: a plain stand-in picture
+                    shot = new System.Drawing.Bitmap(1920, 1080);
+                    using (var g = System.Drawing.Graphics.FromImage(shot)) { g.Clear(System.Drawing.Color.FromArgb(40, 30, 60)); g.DrawString("TEST SCREEN", new System.Drawing.Font("Segoe UI", 80), System.Drawing.Brushes.White, 500, 400); }
+                }
+                else
+                {
+                    var b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
+                    shot = new System.Drawing.Bitmap(b.Width, b.Height);
+                    using (var g = System.Drawing.Graphics.FromImage(shot)) g.CopyFromScreen(b.Left, b.Top, 0, 0, b.Size);
+                }
+                using (shot)
+                {
+                    int w = Math.Min(1600, shot.Width), h = (int)Math.Round(shot.Height * (w / (double)shot.Width));
+                    using (var small = new System.Drawing.Bitmap(w, h))
+                    {
+                        using (var g = System.Drawing.Graphics.FromImage(small)) { g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic; g.DrawImage(shot, 0, 0, w, h); }
+                        var enc = System.Drawing.Imaging.ImageCodecInfo.GetImageEncoders().First(c => c.MimeType == "image/jpeg");
+                        var p = new System.Drawing.Imaging.EncoderParameters(1); p.Param[0] = new System.Drawing.Imaging.EncoderParameter(System.Drawing.Imaging.Encoder.Quality, 70L);
+                        using (var ms = new MemoryStream()) { small.Save(ms, enc, p); if (Peeked != null) Peeked(); if (Input.Test) try { File.AppendAllText(Input.TestLog, "peek\n"); } catch { } return ms.ToArray(); }
+                    }
+                }
+            }
+            catch { return null; }
+        }
+
         // ---- v1.7: trackpad and keyboard - only while the switch on the PC is on (off by default) and the remote isn't paused
         string InputCmd(Dictionary<string, string> q)
         {
@@ -559,6 +605,7 @@ namespace HallowRemote
                 { "input", S.AllowInput && !Paused },   // v1.7
                 { "sys", SysMedia() },   // v1.8: PC volume and what's playing, without Hallow Mixer
                 { "apps", AppsJson() },  // v1.8: names only (never paths)
+                { "clipboard", S.AllowClipboard && !Paused }, { "peek", S.AllowPeek && !Paused },   // v1.9
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
             return o;
@@ -675,6 +722,15 @@ namespace HallowRemote
                     string d; q.TryGetValue("do", out d); if (d != "show" && d != "hide") break;
                     var r = Family.Send("Overlay", d, 5000);
                     msg = Family.Error(r, "Hallow Overlay isn't running") ?? (d == "show" ? "Overlay shown" : "Overlay hidden"); break;
+                }
+                case "paste":   // v1.9: text from the phone onto the PC clipboard (only while its switch is on)
+                {
+                    string tx; q.TryGetValue("t", out tx);
+                    if (!S.AllowClipboard || Paused) { msg = null; return js.Serialize(new Dictionary<string, object> { { "ok", false }, { "msg", "Sending to the clipboard is off - turn it on in Hallow Remote on your PC" } }); }
+                    if (string.IsNullOrEmpty(tx) || tx.Length > 2000) return js.Serialize(new Dictionary<string, object> { { "ok", false }, { "msg", "Up to 2000 characters" } });
+                    var setter = SetClipboard; if (setter == null || !setter(tx)) return js.Serialize(new Dictionary<string, object> { { "ok", false }, { "msg", "The PC clipboard is busy - try again" } });
+                    if (Log != null) Log("text put on the clipboard (" + tx.Length + " characters)");
+                    return js.Serialize(new Dictionary<string, object> { { "ok", true }, { "msg", "On your PC's clipboard - paste with Ctrl+V" } });
                 }
                 case "pcmedia":   // v1.8: media keys (work with any player)
                 {

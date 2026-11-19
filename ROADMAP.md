@@ -13,6 +13,7 @@
 | **1.6** | Live stats page (FPS / ping / server region and last match from Hallow Overlay's status when it reports them, otherwise Remote's PC stats; 1 s refresh while open); My buttons: a grid built only from the fixed action list (choose, order, rename), saved in remote.json, power keeps its confirm tap |
 | **1.7** | Updates from GitHub (asks first, SHA-256 checked, numeric version compare); trackpad, clicks, drag, scroll, typing and a fixed set of keys on the phone (SendInput) - off by default, its own switch with a warning, never while paused |
 | **1.8** | Media keys, PC volume and mute (Core Audio) and now playing (Windows media sessions) without Hallow Mixer; apps to open from a list set up on the PC only (phone sees names and random ids, never paths); both in My buttons |
+| **1.9** | Text from the phone onto the PC clipboard (opt-in, up to 2000 characters); Screen peek: one JPEG of the main screen per tap (opt-in, off by default, at most one every 2 s, announced on the PC each time); both stop while paused |
 
 ## Next
 
@@ -33,10 +34,8 @@ What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow 
 - Streaming games with touch controls (Steam Link) - **not buildable** sensibly: needs a low-latency video encoder and stream; Steam Link already does it
 - Works on networks that block device-to-device traffic (KDE Connect over OpenVPN) - **already covered** by Tailscale
 
-### 1.9 - Clipboard and screen peek
-- Send text from the phone to the PC clipboard (opt-in)
-- Screen peek: a one-shot screenshot, opt-in and off by default
 ### Still to check by hand
+- Trackpad, typing, media keys, PC volume, clipboard and screen peek on the real PC (tests only used stand-ins so nothing reached the real mouse, keyboard, volume, clipboard or screen)
 - Live stats with a real Hallow Overlay: Overlay 1.8 shares its last match but not live FPS / ping / server in its status yet, so those tiles appear once it does
 - One Hallow icon with the real Hallow Hub 2.4 (tested against a fake Hub pipe)
 - HTTPS with a real Tailscale certificate on a real phone (tested with self-signed EC and RSA certificates only; needs HTTPS turned on in the Tailscale admin console)

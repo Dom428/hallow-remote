@@ -7,6 +7,11 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.9
+- Send text from your phone to the PC clipboard.
+- Screen peek: one picture of your screen when you tap.
+  Both are off until you turn them on in the PC window.
+
 WHAT'S NEW IN 1.8
 - What's playing, play / pause / skip and the PC volume - also without Hallow Mixer.
 - Open apps on your PC from your phone (you choose them in the PC window).
@@ -54,6 +59,8 @@ ON YOUR PHONE
 - My buttons: your own grid of the actions above (choose, order, rename)
 - Media: PC volume, what's playing, play / pause / skip - also without Hallow Mixer
 - Open on your PC: apps you add in the PC window (Add an app)
+- Send to your PC: text onto the PC clipboard (turn it on in the PC window first)
+- Screen peek: one picture of your screen when you tap (off until you turn it on; the PC tells you each time)
 - Mouse: trackpad and keyboard - turn on "Let your phone use the mouse and keyboard" on the PC first
 - Your PC: CPU, GPU, GPU temperature, RAM
 
