@@ -11,6 +11,11 @@
 
 ## Next
 
+### 1.4 - One Hallow icon
+- Hallow Hub hosts one tray icon for the family: Remote answers `open`, `menu` (Show the phone code, Copy link, Pause the remote), `invoke` and `quit` on its pipe - never the link or its code
+- "Use the Hallow icon" setting (on by default): Remote hides its own tray icon while Hub hosts the menu, and shows it again when Hub doesn't
+- Remote's messages go through Hub's icon while its own is hidden
+
 ### Still to check by hand
 - HTTPS with a real Tailscale certificate on a real phone (tested with self-signed EC and RSA certificates only; needs HTTPS turned on in the Tailscale admin console)
 - Scan the QR code with a real phone over Tailscale (the encoder passes an independent decoder, but no camera has read it yet)
