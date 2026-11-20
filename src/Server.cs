@@ -185,6 +185,7 @@ namespace HallowRemote
         {
             if (line == "ping") return "ok " + Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version } });
             if (line == "status") return "ok " + StatusJson();
+            if (line.StartsWith("keys-share ")) return KeysShare(line.Substring(11));   // v1.12: Hallow Keys asks for a one-time share link
             return "error unknown command";
         }
 
@@ -222,6 +223,7 @@ namespace HallowRemote
                 var target = parts[1]; var qi = target.IndexOf('?');
                 var path = qi < 0 ? target : target.Substring(0, qi); var query = qi < 0 ? "" : target.Substring(qi + 1);
                 var segs = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                if (segs.Length > 0 && segs[0] == "share" && ShareRequest(st, segs, plainWhileTls, parts[0])) return;   // v1.12: one-time share links from Hallow Keys (no code in them)
                 if (segs.Length == 0 || !Same(segs[0], S.Code)) { Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found")); return; }
                 if (plainWhileTls)
                 {
@@ -232,8 +234,9 @@ namespace HallowRemote
                 var rest = "/" + string.Join("/", segs.Skip(1));
                 var q = Query(query);
                 // v1.11: POST only for a file from the phone (streamed to disk); everything else stays GET
-                if ((parts[0] == "POST") != (rest == "/api/upload")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes(parts[0] == "POST" ? "Only GET" : "Only POST")); return; }
+                if ((parts[0] == "POST") != (rest == "/api/upload" || rest == "/api/keys/change")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes(parts[0] == "POST" ? "Only GET" : "Only POST")); return; }
                 if (rest == "/api/upload") { int code; var res = Upload(client, st, headers, q, buf, bodyAt, n, out code); Changed(); Send(st, code, "application/json", Encoding.UTF8.GetBytes(res)); }
+                else if (rest == "/api/keys/change") KeysChange(client, st, headers, buf, bodyAt, n);   // v1.12: a sealed change from the phone's Keys tab, passed to Hallow Keys
                 else if (rest.StartsWith("/api/get/"))   // v1.11: a file from the PC's "Send to phone" list, by its random id
                 {
                     var o = OutgoingById(rest.Substring(9));

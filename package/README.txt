@@ -7,6 +7,11 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.12
+- Keys tab: a full editor with Hallow Keys 2.7 (turn on "Let the phone edit" in Hallow Keys) - add, edit, trash,
+  generate passwords, 2FA keys, folders and vaults. Changes are sealed on the phone; Remote can't read them.
+- One-time share links for single Hallow Keys items (served once over HTTPS, opened in the browser with a passphrase).
+
 WHAT'S NEW IN 1.11
 - Files tab: send files from your phone into Downloads\Hallow Remote (off until you
   turn it on in the PC window; up to 200 MB a file by default).

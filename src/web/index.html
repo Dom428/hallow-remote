@@ -98,7 +98,7 @@ var timers = {};
 function slide(ch, v) { el('p_' + ch).textContent = v + '%'; clearTimeout(timers[ch]); timers[ch] = setTimeout(function () { act('a=set&ch=' + ch + '&v=' + v, true); }, 150); }
 function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cls || '') + '">' + (v < 0 ? '-' : v + unit) + '</b><small>' + label + '</small></div>'; }
 function render(s) {
-  el('t_keys').style.display = s.keys ? '' : 'none'; var kk = JSON.stringify(s.keys); if (kk !== lastKeysState) { lastKeysState = kk; if (view == 'keys') renderKeys(s); }
+  el('t_keys').style.display = s.keys ? '' : 'none'; var kk = JSON.stringify(s.keys); if (kk !== lastKeysState) { lastKeysState = kk; if (view == 'keys' && !hk) renderKeys(s); }
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
   if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s); if (view == 'files') renderFiles(s);
   if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
@@ -336,19 +336,38 @@ function peek() {
     .catch(function (e) { toast(typeof e == 'string' ? e : 'Your PC didn\'t answer'); })
     .then(function () { b.disabled = false; b.textContent = 'Peek again'; });
 }
-// ---- v1.10: Hallow Keys on the phone - a read-only copy, decrypted here with WebCrypto (your master password never leaves the phone)
+// ---- v1.10: Hallow Keys on the phone - a copy decrypted here with WebCrypto (your master password never leaves the phone)
+// v1.12 (Hallow Keys 2.7): a full editor when "Let the phone edit" is on in Hallow Keys - add, edit, move to the trash, generate
+// passwords, 2FA keys, folders and vaults. Each change is sealed here with the phone copy's key (AES-256-GCM, with a random id and
+// the time) and sent through Remote to Hallow Keys, which checks it and merges it; Remote can't read it.
 async function hkOpen(blob, password) {
   const enc = new TextEncoder(); const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   if (!blob || blob.v !== 1 || blob.kdf !== 'PBKDF2-SHA256' || !(blob.iter >= 600000)) throw new Error('unsupported');
   const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(blob.salt), iterations: blob.iter }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', hash: 'SHA-256', salt: b64(blob.salt), iterations: blob.iter }, base, { name: 'AES-GCM', length: 256 }, false, ['decrypt', 'encrypt']);
+  return { key: key, salt: blob.salt, data: await hkDecrypt(blob, key) };
+}
+async function hkDecrypt(blob, key) {
+  const enc = new TextEncoder(); const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
   const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(blob.iv), additionalData: enc.encode(blob.aad), tagLength: 128 }, key, b64(blob.ct));
   return JSON.parse(new TextDecoder().decode(plain));
 }
-var lastKeysState = '', hk = null, hkTimer = 0, hkQuery = '', hkSel = -1;
+function hkB64(u8) { var s = ''; for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+// one change, sealed with the phone key: { v: 1, iv, ct } where ct = AES-GCM(JSON { rid, ts, op, id, base, item }, AAD "HallowKeysPhoneChange1")
+async function hkSeal(key, change) {
+  var rid = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  var body = JSON.stringify(Object.assign({ rid: hkB64(rid), ts: Date.now() }, change));
+  var ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv, additionalData: new TextEncoder().encode('HallowKeysPhoneChange1'), tagLength: 128 }, key, new TextEncoder().encode(body)));
+  return { v: 1, iv: hkB64(iv), ct: hkB64(ct) };
+}
+var lastKeysState = '', hk = null, hkTimer = 0, hkQuery = '', hkSel = -1, hkMode = 'list', hkVault = '', hkFolder = '', hkBusy = false;
 function hkTouch() { clearTimeout(hkTimer); hkTimer = setTimeout(function () { hkLock('Locked after 2 minutes.'); }, 120000); }
-function hkLock(msg) { hk = null; hkSel = -1; clearTimeout(hkTimer); if (view === 'keys' && last) renderKeys(last, msg); }
+function hkLock(msg) { hk = null; hkSel = -1; hkMode = 'list'; hkVals = {}; clearTimeout(hkTimer); if (view === 'keys' && last) renderKeys(last, msg); }
 document.addEventListener('visibilitychange', function () { if (document.hidden && hk) hkLock('Locked when you left the page.'); });
+function hkItems() { return hk ? hk.data.items : []; }
+function hkCanEdit() { return !!(hk && hk.data.edit && hkItems().every(function (i) { return i.id; })); }
+function hkItem(id) { return hkItems().filter(function (i) { return i.id === id; })[0]; }
+function hkVaultName(id) { var v = (hk.data.vaults || []).filter(function (x) { return x.id === id; })[0]; return v ? v.name : ''; }
 function renderKeys(s, msg) {
   var k = s.keys, box = el('v_keys');
   if (!k) { box.innerHTML = '<div class="card off">Hallow Keys isn\'t set up on your PC.</div>'; return; }
@@ -358,26 +377,38 @@ function renderKeys(s, msg) {
   }
   if (!k.copy) { box.innerHTML = '<div class="card"><b>Phone copy is off</b><div class="sub" style="margin-top:6px">In Hallow Keys on your PC: Settings &gt; App &gt; turn on <b>Phone copy for Hallow Remote</b>.</div></div>'; return; }
   if (!hk) {
-    box.innerHTML = '<div class="card"><b>Hallow Keys</b><div class="sub" style="margin:4px 0 10px">A read-only copy' + (k.made ? ' from ' + esc(k.made) : '') + '. Your master password stays on this phone.</div>' +
+    box.innerHTML = '<div class="card"><b>Hallow Keys</b><div class="sub" style="margin:4px 0 10px">Your copy' + (k.made ? ' from ' + esc(k.made) : '') + '. Your master password stays on this phone.</div>' +
       '<input id="hkpw" type="password" autocomplete="current-password" placeholder="Master password" style="width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:11px;font:inherit">' +
       '<button class="btn go" style="width:100%;margin-top:10px" id="hkgo" onclick="hkUnlock()">Unlock</button><div class="sub" id="hkmsg" style="margin-top:8px">' + esc(msg || '') + '</div></div>';
     el('hkpw').addEventListener('keydown', function (e) { if (e.key === 'Enter') hkUnlock(); });
     return;
   }
   hkTouch();
-  var items = hk.items.filter(function (i) { var q = hkQuery.toLowerCase(); return !q || [i.title, i.user, i.folder, (i.urls || []).join(' ')].join(' ').toLowerCase().indexOf(q) >= 0; })
-    .sort(function (a, b) { return (b.fav - a.fav) || a.title.localeCompare(b.title); });
-  var h = '<div class="ed"><input id="hkq" placeholder="Search" value="' + esc(hkQuery) + '" oninput="hkQuery=this.value;renderKeys(last)"><button class="btn" onclick="hkLock(\'Locked.\')">Lock</button></div>';
-  if (hkSel >= 0 && hk.items[hkSel]) h += hkDetail(hk.items[hkSel]);
-  else h += '<div class="card">' + (items.length ? items.map(function (i) { return '<button class="clip" onclick="hkSel=' + hk.items.indexOf(i) + ';renderKeys(last)"><div><b>' + (i.fav ? '&#9733; ' : '') + esc(i.title) + '</b><small>' + esc(i.user || i.folder || i.type) + '</small></div></button>'; }).join('') : '<div class="sub">Nothing matches.</div>') + '</div>';
+  if (hkMode === 'edit') return;   // the form keeps what you typed
+  var h = '<div class="ed"><input id="hkq" placeholder="Search" value="' + esc(hkQuery) + '" oninput="hkQuery=this.value;renderKeys(last)">' + (hkCanEdit() ? '<button class="btn go" id="hknew" onclick="hkNew()">+ New</button>' : '') + '<button class="btn" onclick="hkLock(\'Locked.\')">Lock</button></div>';
+  if (hkSel >= 0 && hkItems()[hkSel]) { h += hkDetail(hkItems()[hkSel]); box.innerHTML = h; return; }
+  var vaults = hk.data.vaults || [], folders = {};
+  hkItems().forEach(function (i) { if (i.folder) folders[i.folder] = 1; }); (hk.data.folders || []).forEach(function (f) { folders[f] = 1; });
+  if (vaults.length > 1 || Object.keys(folders).length) {
+    h += '<div class="ed">' + (vaults.length > 1 ? '<select id="hkvsel" onchange="hkVault=this.value;renderKeys(last)"><option value="">All vaults</option>' + vaults.map(function (v) { return '<option value="' + esc(v.id) + '"' + (hkVault === v.id ? ' selected' : '') + '>' + esc(v.name) + '</option>'; }).join('') + '</select>' : '') +
+      (Object.keys(folders).length ? '<select id="hkfsel" onchange="hkFolder=this.value;renderKeys(last)"><option value="">All folders</option>' + Object.keys(folders).sort().map(function (f) { return '<option' + (hkFolder === f ? ' selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>' : '') + '</div>';
+  }
+  var q = hkQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  var items = hkItems().filter(function (i) {
+    if (hkVault && i.vault !== hkVault) return false; if (hkFolder && i.folder !== hkFolder) return false;
+    var t = [i.title, i.user, i.folder, i.type, (i.urls || []).join(' '), i.email, i.name].join(' ').toLowerCase();
+    return q.every(function (w) { return t.indexOf(w) >= 0; });
+  }).sort(function (a, b) { return (b.fav - a.fav) || a.title.localeCompare(b.title); });
+  h += '<div class="card" id="hklist">' + (items.length ? items.map(function (i) { return '<button class="clip" data-id="' + esc(i.id || '') + '" onclick="hkSel=' + hkItems().indexOf(i) + ';renderKeys(last)"><div><b>' + (i.fav ? '&#9733; ' : '') + esc(i.title) + '</b><small>' + esc(i.user || i.folder || i.type) + (vaults.length > 1 && !hkVault && i.vault ? ' &middot; ' + esc(hkVaultName(i.vault)) : '') + '</small></div></button>'; }).join('') : '<div class="sub">Nothing matches.</div>') + '</div>';
+  if (hk.data.items.length && !hkCanEdit()) h += '<div class="sub" style="margin-top:8px">Read-only. To edit here too, turn on <b>Let the phone edit</b> in Hallow Keys on your PC (Settings &gt; App).</div>';
   box.innerHTML = h;
-  var q = el('hkq'); if (q && document.activeElement !== q && hkSel < 0 && hkQuery) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  var qi = el('hkq'); if (qi && document.activeElement !== qi && hkQuery) { qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); }
 }
 function hkRow(label, value, secret) {
   if (!value) return '';
   var id = 'hk' + Math.random().toString(36).slice(2);
   hkVals[id] = value;
-  return '<div style="margin:10px 0"><div class="sub">' + label + '</div><div class="ed" style="margin:2px 0"><span id="' + id + '" style="flex:1;word-break:break-all;font-size:15px">' + (secret ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(value)) + '</span>' +
+  return '<div style="margin:10px 0"><div class="sub">' + esc(label) + '</div><div class="ed" style="margin:2px 0"><span id="' + id + '" style="flex:1;word-break:break-all;font-size:15px;white-space:pre-wrap">' + (secret ? '&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;' : esc(value)) + '</span>' +
     (secret ? '<button class="btn" onclick="hkShow(\'' + id + '\',this)">Show</button>' : '') + '<button class="btn" onclick="hkCopy(\'' + id + '\')">Copy</button></div></div>';
 }
 var hkVals = {};
@@ -385,11 +416,15 @@ function hkShow(id, b) { var sp = el(id), shown = b.textContent === 'Hide'; sp.i
 function hkCopy(id) { navigator.clipboard.writeText(hkVals[id]).then(function () { toast('Copied'); }, function () { toast('Couldn\'t copy'); }); hkTouch(); }
 function hkDetail(i) {
   hkVals = {};
-  var h = '<div class="card"><button class="btn" onclick="hkSel=-1;renderKeys(last)">&#8592; All items</button><h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:#ece8f4;letter-spacing:0">' + esc(i.title) + '</h2>';
+  var h = '<div class="card"><div class="ed" style="margin:0"><button class="btn" onclick="hkSel=-1;renderKeys(last)">&#8592; All items</button><span style="flex:1"></span>' +
+    (hkCanEdit() && i.editable ? '<button class="btn" id="hkedit" onclick="hkEdit(\'' + esc(i.id) + '\')">Edit</button><button class="btn" id="hktrash" onclick="hkTrash(\'' + esc(i.id) + '\')">Trash</button>' : '') + '</div>' +
+    '<h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:#ece8f4;letter-spacing:0">' + esc(i.title) + '</h2>' +
+    ((i.folder || i.vault) ? '<div class="sub">' + esc([i.folder, (hk.data.vaults || []).length > 1 ? hkVaultName(i.vault) : ''].filter(Boolean).join(' · ')) + '</div>' : '');
   h += hkRow('Username', i.user) + hkRow('Password', i.pw, true) + (i.totp ? '<div style="margin:10px 0"><div class="sub">2FA code</div><div class="ed" style="margin:2px 0"><span id="hktotp" style="flex:1;font-size:20px;font-weight:700">...</span><button class="btn" onclick="hkCopyTotp()">Copy</button></div></div>' : '');
   (i.urls || []).forEach(function (u) { h += hkRow('Website', u); });
   h += hkRow('Name on card', i.cardHolder) + hkRow('Card number', i.cardNumber, true) + hkRow('Expiry', i.expiry) + hkRow('Security code', i.cvc, true) + hkRow('PIN', i.pin, true);
   h += hkRow('Name', i.name) + hkRow('Email', i.email) + hkRow('Phone', i.phone) + hkRow('Address', i.address) + hkRow(i.type === 'note' ? 'Note' : 'Notes', i.notes);
+  if (i.editable === false) h += '<div class="sub" style="margin-top:8px">This kind of item can only be changed on the PC.</div>';
   h += '</div>';
   if (i.totp) setTimeout(function () { hkTotpTick(i.totp); }, 0);
   return h;
@@ -417,9 +452,106 @@ function hkUnlock() {
   var pw = el('hkpw').value; if (!pw) return; el('hkgo').disabled = true; el('hkmsg').textContent = 'Unlocking...';
   fetch(base + 'api/keys', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw 'nocopy'; return r.json(); })
     .then(function (blob) { return hkOpen(blob, pw); })
-    .then(function (d) { pw = null; hk = d; hkSel = -1; hkQuery = ''; renderKeys(last); })
+    .then(function (o) { pw = null; hk = o; hkSel = -1; hkQuery = ''; hkMode = 'list'; renderKeys(last); })
     .catch(function (e) { pw = null; var m = el('hkmsg'); if (m) m.textContent = e === 'nocopy' ? 'Couldn\'t get the copy from your PC.' : 'Wrong master password (or an old copy - unlock Hallow Keys on the PC once).'; var g = el('hkgo'); if (g) g.disabled = false; });
 }
+// fetches the PC's copy again (after a change) with the key in memory
+function hkReload(selectId) {
+  return fetch(base + 'api/keys', { cache: 'no-store' }).then(function (r) { if (!r.ok) throw 'nocopy'; return r.json(); })
+    .then(function (blob) { if (!hk || blob.salt !== hk.salt) throw 'rekey'; return hkDecrypt(blob, hk.key); })
+    .then(function (d) { if (!hk) return; hk.data = d; hkMode = 'list'; hkSel = selectId ? hkItems().indexOf(hkItem(selectId)) : -1; renderKeys(last); })
+    .catch(function () { hkLock('The copy on your PC changed (new master password?) - unlock again.'); });
+}
+function hkSend(change, done) {
+  if (hkBusy || !hk) return; hkBusy = true; hkTouch();
+  hkSeal(hk.key, change).then(function (rec) { return fetch(base + 'api/keys/change', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rec) }); })
+    .then(function (r) { return r.json().catch(function () { return { ok: false, msg: 'Your PC didn\'t answer' }; }); })
+    .then(function (j) {
+      hkBusy = false;
+      if (!j.ok) { toast(j.msg || 'Not saved'); var m = el('hkemsg'); if (m) m.textContent = j.msg || 'Not saved'; return; }
+      toast(j.status === 'conflict' ? (j.msg || 'Changed on the PC too - kept as a conflict copy') : j.status === 'trashed' ? 'Moved to the trash on your PC' : 'Saved on your PC');
+      hkReload(j.status === 'trashed' ? null : j.id).then(function () { if (done) done(j); });
+    })
+    .catch(function () { hkBusy = false; toast('Your PC didn\'t answer - nothing was changed'); });
+}
+function hkTrash(id) { var i = hkItem(id); if (!i || !confirm('Move "' + i.title + '" to the trash on your PC? (It stays there for 30 days.)')) return; hkSend({ op: 'trash', id: i.id, base: i.rev }); }
+// ---- the editor
+var hkForm = null;   // { op, id, base, type, orig }
+function hkNew() { hkFormOpen({ op: 'add', type: 'login', orig: { type: 'login', title: '', vault: hkVault || '', folder: hkFolder || '', urls: [] } }); }
+function hkEdit(id) { var i = hkItem(id); if (!i) return; hkFormOpen({ op: 'edit', id: i.id, base: i.rev, type: i.kind, orig: i }); }
+var hkFieldsByType = {
+  login: [['title', 'Title'], ['user', 'Username'], ['pw', 'Password', 'pw'], ['urls', 'Websites (one per line)', 'lines'], ['totp', '2FA setup key or otpauth:// link', 'totp'], ['notes', 'Notes', 'area']],
+  note: [['title', 'Title'], ['notes', 'Note', 'area']],
+  card: [['title', 'Title'], ['cardHolder', 'Name on card'], ['cardNumber', 'Card number', 'secret'], ['expiry', 'Expiry (MM/YY)'], ['cvc', 'Security code', 'secret'], ['pin', 'PIN', 'secret'], ['notes', 'Notes', 'area']],
+  identity: [['title', 'Title'], ['name', 'Full name'], ['email', 'Email'], ['phone', 'Phone'], ['address', 'Address', 'area'], ['city', 'City'], ['postCode', 'Postcode'], ['country', 'Country'], ['notes', 'Notes', 'area']]
+};
+function hkOrigVal(o, k) {
+  if (k === 'urls') return (o.urls || []).join('\n'); if (k === 'notes') return o.rawNotes != null ? o.rawNotes : (o.notes || '');
+  if (o.addr && (k === 'address' || k === 'city' || k === 'postCode' || k === 'country')) return o.addr[k] || '';
+  return o[k] == null ? '' : String(o[k]);
+}
+function hkInput(k, label, kind, v) {
+  var st = 'width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit';
+  var h = '<div style="margin:9px 0"><div class="sub">' + esc(label) + '</div>';
+  if (kind === 'area' || kind === 'lines') return h + '<textarea id="hkf_' + k + '" rows="' + (kind === 'lines' ? 2 : 4) + '" style="' + st + '">' + esc(v) + '</textarea></div>';
+  var secret = kind === 'pw' || kind === 'secret';
+  h += '<div class="ed" style="margin:2px 0"><input id="hkf_' + k + '" ' + (secret ? 'type="password" ' : '') + 'autocomplete="off" autocapitalize="off" spellcheck="false" value="' + esc(v) + '"' + (kind === 'totp' ? ' oninput="hkTotpPreview()"' : '') + '>';
+  if (secret) h += '<button class="btn" onclick="var e=el(\'hkf_' + k + '\');e.type=e.type===\'password\'?\'text\':\'password\';this.textContent=e.type===\'password\'?\'Show\':\'Hide\'">Show</button>';
+  if (kind === 'pw') h += '<button class="btn" id="hkgen" onclick="hkGenOpen()">Generate</button>';
+  h += '</div>' + (kind === 'totp' ? '<div class="sub" id="hktotpprev"></div>' : '') + (kind === 'pw' ? '<div id="hkgenbox"></div>' : '') + '</div>';
+  return h;
+}
+function hkFormOpen(f) {
+  hkForm = f; hkMode = 'edit'; hkTouch();
+  var o = f.orig, vaults = hk.data.vaults || [], folders = {};
+  hkItems().forEach(function (i) { if (i.folder) folders[i.folder] = 1; }); (hk.data.folders || []).forEach(function (x) { folders[x] = 1; });
+  var h = '<div class="card"><div class="ed" style="margin:0"><button class="btn" onclick="hkFormClose()">Cancel</button><span style="flex:1"></span><button class="btn go" id="hksave" onclick="hkFormSave()">Save</button></div>';
+  h += '<h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:#ece8f4;letter-spacing:0">' + (f.op === 'add' ? 'New item' : 'Edit ' + esc(o.title)) + '</h2>';
+  if (f.op === 'add') h += '<div class="ed"><select id="hkf_type" onchange="hkForm.type=this.value;hkForm.orig.type=this.value;hkFormOpen(hkForm)">' + [['login', 'Login'], ['note', 'Secure note'], ['card', 'Card'], ['identity', 'Identity']].map(function (t) { return '<option value="' + t[0] + '"' + (f.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>';
+  var fields = hkFieldsByType[f.type] || [['title', 'Title'], ['notes', 'Notes', 'area']];
+  fields.forEach(function (x) { h += hkInput(x[0], x[1], x[2], hkOrigVal(o, x[0])); });
+  if (!hkFieldsByType[f.type]) (o.efields || []).forEach(function (x) { h += hkInput('x_' + x.id, x.label, x.kind === 'note' || x.kind === 'secretnote' ? 'area' : x.hidden ? 'secret' : x.kind === 'totp' ? 'totp' : '', x.value); });
+  h += '<div style="margin:9px 0"><div class="sub">Folder</div><div class="ed" style="margin:2px 0"><input id="hkf_folder" list="hkfolders" value="' + esc(o.folder || '') + '"><datalist id="hkfolders">' + Object.keys(folders).sort().map(function (x) { return '<option value="' + esc(x) + '">'; }).join('') + '</datalist></div></div>';
+  if (vaults.length > 1) h += '<div style="margin:9px 0"><div class="sub">Vault</div><div class="ed" style="margin:2px 0"><select id="hkf_vault">' + vaults.map(function (v) { return '<option value="' + esc(v.id) + '"' + ((o.vault || vaults[0].id) === v.id ? ' selected' : '') + '>' + esc(v.name) + '</option>'; }).join('') + '</select></div></div>';
+  h += '<label class="sub" style="display:flex;gap:8px;align-items:center;margin:10px 0"><input type="checkbox" id="hkf_fav"' + (o.fav ? ' checked' : '') + '> Favourite</label><div class="sub warn" id="hkemsg"></div></div>';
+  el('v_keys').innerHTML = h; hkTotpPreview();
+}
+function hkFormClose() { hkForm = null; hkMode = 'list'; renderKeys(last); }
+function hkTotpPreview() { var e = el('hkf_totp'), p = el('hktotpprev'); if (!e || !p) return; var v = e.value.trim(); if (!v) { p.textContent = ''; return; } if (!hkTotpSpec(v)) { p.textContent = 'Not a valid 2FA key'; return; } hkTotp(v, Date.now()).then(function (c) { p.textContent = 'Code now: ' + c; }); }
+function hkFormSave() {
+  var f = hkForm; if (!f) return; var o = f.orig, item = {}, fields = hkFieldsByType[f.type] || [['title'], ['notes']];
+  fields.forEach(function (x) {
+    var e = el('hkf_' + x[0]); if (!e) return; var v = e.value;
+    if (x[0] === 'urls') { var l = v.split('\n').map(function (s) { return s.trim(); }).filter(Boolean); if (f.op === 'add' || l.join('\n') !== (o.urls || []).join('\n')) item.urls = l; return; }
+    if (f.op === 'add' ? v !== '' : v !== hkOrigVal(o, x[0])) item[x[0]] = v;
+  });
+  var fo = el('hkf_folder').value.trim(); if (fo !== (o.folder || '')) item.folder = fo;
+  var vs = el('hkf_vault'); if (vs && vs.value !== (o.vault || '')) item.vault = vs.value;
+  var fav = el('hkf_fav').checked; if (fav !== !!o.fav) item.fav = fav;
+  if (!hkFieldsByType[f.type]) { var xf = (o.efields || []).filter(function (x) { var e = el('hkf_x_' + x.id); return e && e.value !== x.value; }).map(function (x) { return { id: x.id, value: el('hkf_x_' + x.id).value }; }); if (xf.length) item.fields = xf; }
+  if (f.op === 'add') { item.type = f.type; if (!item.title) { el('hkemsg').textContent = 'Give it a title.'; return; } }
+  else if (!Object.keys(item).length) { hkFormClose(); return; }
+  var b = el('hksave'); if (b) b.disabled = true;
+  hkSend(f.op === 'add' ? { op: 'add', item: item } : { op: 'edit', id: f.id, base: f.base, item: item }, function () { hkForm = null; });
+  setTimeout(function () { var b2 = el('hksave'); if (b2) b2.disabled = false; }, 1500);
+}
+// ---- password generator (Windows-style random from crypto.getRandomValues, no modulo bias)
+var hkGen = { len: 20, digits: true, symbols: true };
+function hkRand(n) { var lim = Math.floor(4294967296 / n) * n, x = new Uint32Array(1); do { crypto.getRandomValues(x); } while (x[0] >= lim); return x[0] % n; }
+function hkGenerate(o) {
+  var sets = ['abcdefghijkmnopqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ'].concat(o.digits ? ['23456789'] : []).concat(o.symbols ? ['!@#$%^&*-_=+?'] : []);
+  var all = sets.join(''), out = sets.map(function (s) { return s[hkRand(s.length)]; });
+  while (out.length < o.len) out.push(all[hkRand(all.length)]);
+  for (var i = out.length - 1; i > 0; i--) { var j = hkRand(i + 1), t = out[i]; out[i] = out[j]; out[j] = t; }
+  return out.join('');
+}
+function hkGenOpen() {
+  var b = el('hkgenbox'); if (!b) return;
+  b.innerHTML = '<div class="card" style="margin-top:6px;padding:10px"><div class="ed" style="margin:0"><span class="sub" style="width:70px">Length <b id="hkglen">' + hkGen.len + '</b></span><input type="range" min="8" max="64" value="' + hkGen.len + '" oninput="hkGen.len=+this.value;el(\'hkglen\').textContent=this.value;hkGenFill()"></div>' +
+    '<label class="sub"><input type="checkbox" ' + (hkGen.digits ? 'checked' : '') + ' onchange="hkGen.digits=this.checked;hkGenFill()"> Digits</label> &nbsp; <label class="sub"><input type="checkbox" ' + (hkGen.symbols ? 'checked' : '') + ' onchange="hkGen.symbols=this.checked;hkGenFill()"> Symbols</label> &nbsp; <button class="btn" onclick="hkGenFill()">Again</button></div>';
+  hkGenFill();
+}
+function hkGenFill() { var e = el('hkf_pw'); if (!e) return; e.value = hkGenerate(hkGen); e.type = 'text'; hkTouch(); }
 if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () { });
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {

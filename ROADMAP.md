@@ -15,6 +15,7 @@
 | **1.8** | Media keys, PC volume and mute (Core Audio) and now playing (Windows media sessions) without Hallow Mixer; apps to open from a list set up on the PC only (phone sees names and random ids, never paths); both in My buttons |
 | **1.9** | Text from the phone onto the PC clipboard (opt-in, up to 2000 characters); Screen peek: one JPEG of the main screen per tap (opt-in, off by default, at most one every 2 s, announced on the PC each time); both stop while paused |
 | **1.11** | Files both ways: phone -> `Downloads\Hallow Remote` (opt-in, off by default; size cap 200 MB by default; streamed to disk; safe names, never overwrites; marked as from another computer; announced on the PC each time; stops while paused), and a Send to phone list filled on the PC by drag and drop or a picker (the phone sees names, sizes and random ids, never paths; 24 hours each) |
+| **1.12** | Hallow Keys 2.7 editor on the phone (add / edit / trash / generator / 2FA keys / folders and vaults): changes sealed on the phone (AES-GCM, phone key), POST api/keys/change checked for shape and size only and passed to Keys over the family pipe; one-time share links for .hkshare items at a random 128-bit /share/ path (memory only, served once, expiry, HTTPS only, no code in the link) with a page that opens them (Argon2id in plain JS, RFC 9106 vectors, + WebCrypto); family pipe reads long lines in chunks |
 | **1.10** | Keys tab: Hallow Keys' phone copy served only over HTTPS (403 otherwise), decrypted on the phone with WebCrypto (PBKDF2-SHA256 + AES-GCM), view and copy only, TOTP codes, locks after 2 minutes or when the page is hidden; a service worker keeps the page and the encrypted copy for offline use |
 
 ## Next
@@ -37,6 +38,7 @@ What Unified Remote, KDE Connect and Steam Link's phone controls do that Hallow 
 - Works on networks that block device-to-device traffic (KDE Connect over OpenVPN) - **already covered** by Tailscale
 
 ### Still to check by hand
+- 1.12: the Keys editor and a share link on a real phone (iPhone Safari / Android Chrome) over a real Tailscale certificate - tested in headless Edge in a phone-sized window with a self-signed test certificate, and with Node's WebCrypto; a share link opened on another device on your tailnet
 - Sending files from a real phone (iOS / Android file pickers, big videos over Tailscale) and downloading them on the phone - tests used a local HTTP client and a desktop browser
 - Trackpad, typing, media keys, PC volume, clipboard and screen peek on the real PC (tests only used stand-ins so nothing reached the real mouse, keyboard, volume, clipboard or screen)
 - Live stats with a real Hallow Overlay: Overlay 1.8 shares its last match but not live FPS / ping / server in its status yet, so those tiles appear once it does
