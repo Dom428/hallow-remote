@@ -72,7 +72,7 @@ namespace HallowRemote
                     new Dictionary<string, object> { { "name", "My buttons" }, { "url", b + "?tab=mine" } } } } });
         }
 
-        // ---- app icons, drawn once: the Hallow Remote phone with three sliders. maskable = full-bleed background, art inside the safe circle
+        // ---- app icons, drawn once: the Hallow Remote phone with its levels and signal waves (v1.14). maskable = full-bleed background, art inside the safe circle
         static readonly Dictionary<string, byte[]> iconCache = new Dictionary<string, byte[]>();
         public static byte[] AppIconPng(string name)
         {
@@ -111,15 +111,24 @@ namespace HallowRemote
                     if (mask) g.FillRectangle(bg, bgRect); else using (var p = Round(bgRect, 48 * s)) g.FillPath(bg, p);
                 // the art: 70 % of the plain icon, 56 % of a maskable one (inside its safe circle)
                 float k = mask ? 0.8f : 1f; Func<float, float> X = v => n / 2f + (v - 128) * s * k;
-                var phone = new RectangleF(X(76), X(44), (180 - 76) * s * k, (212 - 44) * s * k);
-                using (var pen = new Pen(new LinearGradientBrush(new PointF(0, phone.Top), new PointF(0, phone.Bottom + 1), Color.FromArgb(0xf4, 0x9a, 0x52), Color.FromArgb(0xc0, 0x8a, 0xe8)), 10 * s * k))
-                using (var p = Round(phone, 18 * s * k)) { using (var fill = new SolidBrush(Color.FromArgb(0x12, 0x0e, 0x18))) g.FillPath(fill, p); g.DrawPath(pen, p); }
-                var cols = new[] { Color.FromArgb(0xf0, 0x78, 0x20), Color.FromArgb(0xa9, 0x8b, 0xe0), Color.FromArgb(0x6e, 0xd2, 0x8c) };
-                var xs = new[] { 106f, 128f, 150f }; var knob = new[] { 106f, 134f, 122f };
+                // v1.14: the new Hallow Remote icon - the phone (orange -> purple) with the mixer's levels, and signal waves
+                var phone = new RectangleF(X(38), X(77), 87 * s * k, 143 * s * k);
+                using (var p = Round(phone, 18 * s * k)) using (var fill = new LinearGradientBrush(phone, Color.FromArgb(0xff, 0x9a, 0x45), Color.FromArgb(0xb4, 0x8b, 0xf0), 60f)) g.FillPath(fill, p);
+                var scr = RectangleF.Inflate(phone, -11.5f * s * k, -15.4f * s * k);
+                using (var p = Round(scr, 9 * s * k)) using (var fill = new SolidBrush(Color.FromArgb(0x14, 0x10, 0x1b))) g.FillPath(fill, p);
+                var cols = new[] { Color.FromArgb(0xf0, 0x78, 0x20), Color.FromArgb(0xa9, 0x8b, 0xe0), Color.FromArgb(0x6e, 0xd2, 0x8c) }; var lv = new[] { 0.7f, 0.4f, 0.55f };
+                float gap = scr.Width / 4, tw = 10 * s * k, top = scr.Y + scr.Height * 0.2f, bot = scr.Bottom - scr.Height * 0.18f;
                 for (int i = 0; i < 3; i++)
                 {
-                    using (var pen = new Pen(cols[i], 9 * s * k) { StartCap = LineCap.Round, EndCap = LineCap.Round }) g.DrawLine(pen, X(xs[i]), X(knob[i]), X(xs[i]), X(176));
-                    float r = 13 * s * k; using (var w = new SolidBrush(Color.FromArgb(0xf2, 0xee, 0xf8))) g.FillEllipse(w, X(xs[i]) - r, X(knob[i]) - r, 2 * r, 2 * r);
+                    float x = scr.X + gap * (i + 1), ky = bot - (bot - top) * lv[i];
+                    using (var p = Round(new RectangleF(x - tw / 2, ky, tw, bot - ky), tw / 2)) using (var fb = new SolidBrush(cols[i])) g.FillPath(fb, p);
+                }
+                float wx = phone.Right - 2.6f * s * k, wy = phone.Y + 35.8f * s * k; var radii = new[] { 33.3f, 58.9f, 84.5f };
+                for (int i = 0; i < 3; i++)
+                {
+                    float r = radii[i] * s * k;
+                    using (var pen = new Pen(Color.FromArgb(255 - i * 45, 0x6e, 0xd2, 0x8c), 14 * s * k) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+                        g.DrawArc(pen, wx - r, wy - r, 2 * r, 2 * r, -62, 70);
                 }
             }
             return bmp;

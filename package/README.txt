@@ -7,6 +7,9 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.14
+- New app icon: the phone with signal waves (also on the phone's home screen after you add it again).
+
 WHAT'S NEW IN 1.13
 - Home: a dashboard of big cards - your game, mic, now playing, last clip, Hallow Guard's score
   with Quick scan, remote help (Hallow Assist, with Disconnect) and saves. Swipe between tabs.
