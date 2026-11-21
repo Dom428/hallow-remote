@@ -7,6 +7,11 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.17
+- Light mode readability fixes. On the PC window in light mode, a filled accent (Update / OK buttons and the picked chips)
+  is darkened a little when its text wouldn't read well enough on it (e.g. a violet accent), the accent as text stays
+  readable on every light surface, and switches that are off now show their knob clearly.
+
 WHAT'S NEW IN 1.16
 - Light and dark mode. The PC window follows the Hallow setting in Hallow Toolkit (Light / Dark / Same as Windows),
   or pick Light or Dark just for Hallow Remote under the accent switch (Look: Follow Hallow / Light / Dark).

@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.16.0.0")]
-[assembly: AssemblyFileVersion("1.16.0.0")]
+[assembly: AssemblyVersion("1.17.0.0")]
+[assembly: AssemblyFileVersion("1.17.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.16";
+        public const string Version = "1.17";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -55,11 +55,11 @@ namespace HallowRemote
         // v1.5: the accent in use ("#RRGGBB") - the Hallow accent from Hallow Toolkit, or Remote's own orange
         public static string AccentHex = Accent.Default;
         // v1.16: the accent as text / thin lines - darkened in light mode so it reads on the light background
-        public static string AccentText { get { return Look.IsLight ? Look.TextAccent(AccentHex) : AccentHex; } }
+        public static string AccentText { get { return Look.IsLight ? Look.LightTextAccent(AccentHex) : AccentHex; } }   // v1.17: the family rule (readable on Panel 2 too)
         // v1.16: light mode - each dark colour of Theme.xaml (and the few in code) and its light one; the keys stay the same
         public static readonly Dictionary<string, string> LightMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
             { "#16121C", Look.LBg }, { "#211B2A", Look.LPanel }, { "#2E2639", Look.LPanel2 }, { "#3A3248", Look.LBorder }, { "#ECE8F4", Look.LText }, { "#8F88A0", Look.LMuted },
-            { "#C8414B", Look.LRed }, { "#E05A64", "#A82A35" }, { "#2A2333", Look.LPanel2 }, { "#55496A", "#B9AED0" }, { "#FEFEFE", "#1E1A26" }, { "#58566A", "#C9C2D6" },
+            { "#C8414B", Look.LRed }, { "#E05A64", "#A82A35" }, { "#2A2333", Look.LPanel2 }, { "#55496A", "#B9AED0" }, { "#FEFEFE", "#1E1A26" }, { "#58566A", "#7F7890" },
             { "#CDCAD6", "#FFFFFF" }, { "#6ED28C", Look.LGreen }, { "#241E2E", Look.LPanel }, { "#1A1522", Look.LPanel }, { "#A98BE0", Look.LLilac }, { "#F0BE5A", Look.LAmber } };
         public static void LoadTheme(Application app)
         {
@@ -68,7 +68,9 @@ namespace HallowRemote
             var set = RemoteSettings.Load();
             AccentHex = Accent.Current(set.UseHallowAccent);
             Look.IsLight = Look.Resolve(set.Look, Accent.FilePath);
-            xaml = Accent.ApplyTo(xaml.Replace("#F07821", AccentText), AccentHex);
+            xaml = xaml.Replace("#F07821", AccentText);
+            // v1.17: light fills (buttons, on chips) follow the family rule - violet gets a darker fill so its white text reads
+            if (Look.IsLight) { var fill = Look.LightFill(AccentHex); xaml = Accent.ApplyTo(xaml, fill, Look.FillText(fill), true); } else xaml = Accent.ApplyTo(xaml, AccentHex);
             if (Look.IsLight) xaml = Look.Swap(xaml, LightMap);
             app.Resources.MergedDictionaries.Clear();
             app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(xaml));

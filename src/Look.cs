@@ -103,6 +103,31 @@ namespace HallowRemote
             return Color.FromRgb(k(r), k(g), k(b));
         }
 
+        // ---- v1.17: the family accent rule (exactly as Hallow Toolkit 5.16: Get-LightTextAccent / Get-AccentFillText / Get-LightAccentFill)
+        // darken(accent, min, on): HSL from System.Drawing (GetHue / GetSaturation / GetBrightness), L lowered 0.01 a step, H and S kept
+        public static string Darken(string hex, double min, string on)
+        {
+            if (Contrast(hex, on) >= min) return hex.ToUpperInvariant();
+            var a = System.Drawing.ColorTranslator.FromHtml(hex);
+            double h = a.GetHue() / 360.0, s = a.GetSaturation(), l = a.GetBrightness(); var cur = hex.ToUpperInvariant();
+            while (l > 0) { l = Math.Max(0.0, l - 0.01); cur = H(FamilyHsl(h, s, l)); if (Contrast(cur, on) >= min) break; }
+            return cur;
+        }
+        static Color FamilyHsl(double h, double s, double l)
+        {
+            if (s == 0) { var v = (byte)(int)Math.Round(l * 255); return Color.FromRgb(v, v, v); }
+            var q = l < 0.5 ? l * (1 + s) : l + s - l * s; var p = 2 * l - q;
+            Func<double, byte> f = t => { if (t < 0) t += 1; if (t > 1) t -= 1; double r; if (t < 1 / 6.0) r = p + (q - p) * 6 * t; else if (t < 0.5) r = q; else if (t < 2 / 3.0) r = p + (q - p) * (2 / 3.0 - t) * 6; else r = p; return (byte)(int)Math.Round(255 * r); };
+            return Color.FromRgb(f(h + 1 / 3.0), f(h), f(h - 1 / 3.0));
+        }
+        // text on a filled accent: dark #1E1A26 or white, whichever reads better
+        public static string FillText(string fill) { return Contrast(fill, LText) >= Contrast(fill, "#FFFFFF") ? LText : "#FFFFFF"; }
+        // light mode's accent fill (buttons, on chips): the real accent, unless neither text colour reaches 4.5:1 on it (violet #8B5CF6) -
+        // then the accent darkened until white text does
+        public static string LightFill(string accent) { return Contrast(accent, FillText(accent)) >= 4.5 ? accent.ToUpperInvariant() : Darken(accent, 4.5, LPanel); }
+        // light mode's accent as text / thin lines: readable on the darkest light surface it can sit on (Panel 2), so also on Bg and Panel
+        public static string LightTextAccent(string accent) { return Darken(accent, 4.5, LPanel2); }
+
         // Theme.xaml text with each dark colour swapped for its light one (keys stay the same). Whole "#RRGGBB" / "#AARRGGBB" tokens only.
         public static string Swap(string xaml, IDictionary<string, string> darkToLight)
         {

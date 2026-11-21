@@ -42,10 +42,12 @@ namespace HallowRemote
             return l > 0.22 ? "#1A0E04" : "#FFFFFF";
         }
         // the theme's own accent colours swapped for this one
-        public static string ApplyTo(string xaml, string accent)
+        public static string ApplyTo(string xaml, string accent) { return ApplyTo(xaml, accent, OnAccent(accent), false); }
+        // v1.17: with the text on the fill given (light mode: the family rule), always applied
+        public static string ApplyTo(string xaml, string accent, string onAccent, bool always)
         {
-            if (accent == Default) return xaml;
-            return Regex.Replace(Regex.Replace(Regex.Replace(xaml, "#F07820", accent, RegexOptions.IgnoreCase), "#F59A50", Lighter(accent), RegexOptions.IgnoreCase), "#1A0E04", OnAccent(accent), RegexOptions.IgnoreCase);
+            if (accent == Default && !always) return xaml;
+            return Regex.Replace(Regex.Replace(Regex.Replace(xaml, "#F07820", accent, RegexOptions.IgnoreCase), "#F59A50", Lighter(accent), RegexOptions.IgnoreCase), "#1A0E04", onAccent, RegexOptions.IgnoreCase);
         }
 
         // calls changed (on a background thread, 300 ms after the last change) when theme.json changes; null if the folder isn't there (yet)
