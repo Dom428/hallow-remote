@@ -223,8 +223,9 @@ namespace HallowRemote
                 var target = parts[1]; var qi = target.IndexOf('?');
                 var path = qi < 0 ? target : target.Substring(0, qi); var query = qi < 0 ? "" : target.Substring(qi + 1);
                 var segs = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                var ip = Ip(client); if (IsBlocked(ip)) { TooMany(st); return; }   // v1.13: too many different wrong links from there
                 if (segs.Length > 0 && segs[0] == "share" && ShareRequest(st, segs, plainWhileTls, parts[0])) return;   // v1.12: one-time share links from Hallow Keys (no code in them)
-                if (segs.Length == 0 || !Same(segs[0], S.Code)) { Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found")); return; }
+                if (segs.Length == 0 || !Same(segs[0], S.Code)) { if (Missed(ip, segs.Length > 0 ? segs[0] : null)) TooMany(st); else Send(st, 404, "text/plain", Encoding.ASCII.GetBytes("Not found")); return; }
                 if (plainWhileTls)
                 {
                     var to = "https://" + TlsName + ":" + S.Port + target;
@@ -245,8 +246,8 @@ namespace HallowRemote
                 }
                 else if (rest == "/")Send(st, 200, "text/html; charset=utf-8", Resource("index.html"));
                 else if (rest == "/icon.png") Send(st, 200, "image/png", Resource("icon.png"));
-                else if (rest == "/manifest.json") Send(st, 200, "application/manifest+json", Encoding.UTF8.GetBytes(
-                    "{\"name\":\"Hallow\",\"short_name\":\"Hallow\",\"start_url\":\"/" + S.Code + "/\",\"display\":\"standalone\",\"background_color\":\"#16121c\",\"theme_color\":\"#16121c\",\"icons\":[{\"src\":\"/" + S.Code + "/icon.png\",\"sizes\":\"256x256\",\"type\":\"image/png\"}]}"));
+                else if (rest == "/manifest.json") Send(st, 200, "application/manifest+json", Encoding.UTF8.GetBytes(Manifest()));   // v1.13: icons, scope, shortcuts
+                else if (segs.Length == 2 && AppIconPng(segs[1]) != null) Send(st, 200, "image/png", AppIconPng(segs[1]), true);   // v1.13: home-screen icons
                 else if (rest == "/api/state") Send(st, 200, "application/json", Encoding.UTF8.GetBytes(State()));
                 else if (rest == "/api/do") { var res = Do(q); Changed(); Send(st, 200, "application/json", Encoding.UTF8.GetBytes(res)); }
                 else if (rest == "/api/keys")   // v1.10: Hallow Keys' encrypted phone copy - only over HTTPS (the phone needs it for WebCrypto anyway)
@@ -303,7 +304,7 @@ namespace HallowRemote
         static void Send(Stream st, int code, string type, byte[] body, bool cache = false)
         {
             var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : code == 403 ? " Forbidden" : code == 400 ? " Bad Request" : code == 405 ? " Method Not Allowed" : code == 411 ? " Length Required" : code == 413 ? " Payload Too Large" : code == 507 ? " Insufficient Storage" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
-                "\r\nCache-Control: " + (cache ? "max-age=3600" : "no-store") + "\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
+                "\r\nCache-Control: " + (cache ? "max-age=3600" : "no-store") + (type.StartsWith("text/html") ? "\r\nContent-Security-Policy: " + Csp : "") + "\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
             var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length); st.Write(body, 0, body.Length); st.Flush();
         }
         // v1.2: a file with HTTP Range support (phones fetch videos in pieces and seek with it)
@@ -451,7 +452,8 @@ namespace HallowRemote
                 var g = o as Dictionary<string, object>; if (g == null || (Get(g, "off") is bool && (bool)Get(g, "off"))) continue;
                 games.Add(new Dictionary<string, object> { { "name", Get(g, "name") as string }, { "last", When(Get(g, "lastBackup")) }, { "versions", Num(Get(g, "versions")) } });
             }
-            return new Dictionary<string, object> { { "busy", Get(s, "busy") is bool && (bool)Get(s, "busy") }, { "games", games } };
+            var chk = Get(s, "lastCheck") as Dictionary<string, object>;   // v1.13: damaged saves found by Vault's check (for the phone's notice)
+            return new Dictionary<string, object> { { "busy", Get(s, "busy") is bool && (bool)Get(s, "busy") }, { "games", games }, { "damaged", chk == null ? 0 : (int)Num(Get(chk, "damaged")) } };
         }
         static Dictionary<string, object> Overlay()
         {
@@ -567,6 +569,7 @@ namespace HallowRemote
             add("session", "Game session on / off", "Hallow Toolkit");
             add("clip", "Save clip", "Hallow Clips"); add("backup", "Back up now", "Hallow Vault");
             add("overlay:show", "Show overlay", "Hallow Overlay"); add("overlay:hide", "Hide overlay", "Hallow Overlay");
+            add("guard:scan", "Quick scan", "Hallow Guard"); add("assist:disconnect", "End remote help", "Hallow Assist");   // v1.13
             add("power:sleep", "Sleep", "This PC"); add("power:shutdown", "Shut down", "This PC"); add("power:lock", "Lock", "This PC");
             return c;
         }
@@ -584,6 +587,8 @@ namespace HallowRemote
                 case "media": if (arg != "playpause" && arg != "next" && arg != "prev") return null; q["a"] = "media"; q["do"] = arg; return q;
                 case "preset": if (arg.Length == 0 || arg.Length >= 60) return null; q["a"] = "preset"; q["name"] = arg; return q;
                 case "overlay": if (arg != "show" && arg != "hide") return null; q["a"] = "overlay"; q["do"] = arg; return q;
+                case "guard": if (arg != "scan") return null; q["a"] = "guard"; q["do"] = arg; return q;
+                case "assist": if (arg != "disconnect") return null; q["a"] = "assist"; q["do"] = arg; return q;
                 case "power": if (arg != "sleep" && arg != "shutdown" && arg != "lock") return null; q["a"] = "power"; q["do"] = arg; return q;
             }
             return null;
@@ -638,6 +643,7 @@ namespace HallowRemote
                 { "apps", AppsJson() },  // v1.8: names only (never paths)
                 { "clipboard", S.AllowClipboard && !Paused }, { "peek", S.AllowPeek && !Paused },   // v1.9
                 { "keys", KeysState() },   // v1.10
+                { "guard", GuardState() }, { "assist", AssistState() },   // v1.13: Hallow Guard and Hallow Assist
                 { "files", FilesState() },   // v1.11: upload switch and the "Send to phone" list (names, sizes, random ids - never paths)
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
@@ -755,6 +761,12 @@ namespace HallowRemote
                     string d; q.TryGetValue("do", out d); if (d != "show" && d != "hide") break;
                     var r = Family.Send("Overlay", d, 5000);
                     msg = Family.Error(r, "Hallow Overlay isn't running") ?? (d == "show" ? "Overlay shown" : "Overlay hidden"); break;
+                }
+                case "guard": case "assist":   // v1.13: Hallow Guard / Assist - a refusal or "isn't running" comes back as ok:false
+                {
+                    string d; q.TryGetValue("do", out d); string err; msg = a == "guard" ? GuardDo(d, out err) : AssistDo(d, out err);
+                    if (err != null) return js.Serialize(new Dictionary<string, object> { { "ok", false }, { "msg", err } });
+                    break;
                 }
                 case "paste":   // v1.9: text from the phone onto the PC clipboard (only while its switch is on)
                 {

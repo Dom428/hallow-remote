@@ -124,6 +124,23 @@ namespace HallowRemote
             }
             catch { return null; }
         }
+        // v1.13: the app's status.json, only while its pipe is there (for apps whose "status" command rewrites the file each time:
+        // Hallow Guard and Assist - reading the file keeps a phone that's looking from making them write to disk every second)
+        public static Dictionary<string, object> StatusFile(string app)
+        {
+            try
+            {
+                if (!Running(app)) return null;
+                var f = Path.Combine(DataDir(app), "status.json"); if (!File.Exists(f)) return null;
+                string text = null;
+                for (int i = 0; i < 3 && text == null; i++) try { using (var fs = new FileStream(f, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)) using (var r = new StreamReader(fs)) text = r.ReadToEnd(); } catch { Thread.Sleep(40); }
+                if (text == null) return null;
+                var d = js.Deserialize<Dictionary<string, object>>(text);
+                object run; if (d != null && d.TryGetValue("running", out run) && run is bool && !(bool)run) return null;
+                return d;
+            }
+            catch { return null; }
+        }
         // "ok" / "ok {...}" -> null (fine); "error <message>" -> the message; no answer -> notRunning
         public static string Error(string reply, string notRunning)
         {

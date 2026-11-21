@@ -7,6 +7,14 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.13
+- Home: a dashboard of big cards - your game, mic, now playing, last clip, Hallow Guard's score
+  with Quick scan, remote help (Hallow Assist, with Disconnect) and saves. Swipe between tabs.
+- Notices while the page is open: clip saved, backups, threats, someone asking to connect
+  (optionally as phone notifications - needs the https link).
+- A proper home-screen app: icons, splash, install steps; opens without a connection.
+- Safer: the page only talks to your PC, and an address trying many wrong links is shut out.
+
 WHAT'S NEW IN 1.12
 - Keys tab: a full editor with Hallow Keys 2.7 (turn on "Let the phone edit" in Hallow Keys) - add, edit, trash,
   generate passwords, 2FA keys, folders and vaults. Changes are sealed on the phone; Remote can't read them.

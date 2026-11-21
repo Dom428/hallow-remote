@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.12.0.0")]
-[assembly: AssemblyFileVersion("1.12.0.0")]
+[assembly: AssemblyVersion("1.13.0.0")]
+[assembly: AssemblyFileVersion("1.13.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.12";
+        public const string Version = "1.13";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -103,6 +103,8 @@ namespace HallowRemote
             };
             server.Peeked = () => Dispatcher.BeginInvoke(new Action(() => { log.Text = DateTime.Now.ToString("HH:mm") + "  Your phone peeked at the screen"; Notify("Hallow Remote", "Your phone just took a screen peek."); }));
             server.Log = m => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  From your phone: " + m));
+            // v1.13: an address that tried many different wrong links is refused for 15 minutes (the tried links are never shown or kept)
+            server.Blocked = ip => Dispatcher.BeginInvoke(new Action(() => log.Text = DateTime.Now.ToString("HH:mm") + "  Blocked " + ip + " for 15 minutes - it tried many wrong links"));
             // v1.11: each file from the phone is announced (log line and a balloon - through the Hallow icon when Hub hosts it)
             server.Uploaded = (name, size) => Dispatcher.BeginInvoke(new Action(() =>
             {

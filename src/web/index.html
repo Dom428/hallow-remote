@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex"><meta name="theme-color" content="#16121c">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Hallow">
-<link rel="manifest" href="manifest.json"><link rel="icon" href="icon.png"><link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="app-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Hallow</title>
 <style>
 :root{--accent:#f07820;--on-accent:#1a0e04}
@@ -41,7 +41,7 @@ input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}
 .vg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #2e2639;font-size:14px}.vg:first-of-type{border-top:0}.vg span{color:#8f88a0;font-size:13px;text-align:right}
 .power{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.power .btn{padding:14px 6px}
 .btn:disabled{opacity:.55}
-.tabs{display:flex;gap:6px;margin:0 0 14px}.tabs button{flex:1;min-width:0;border:0;border-radius:12px;padding:9px 2px;background:#211b2a;color:#8f88a0;font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
+.tabs{display:flex;gap:6px;margin:0 -14px 14px;padding:0 14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:1 0 auto;min-width:64px;border:0;border-radius:12px;padding:11px 12px;background:#211b2a;color:#8f88a0;font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
 .big{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.big .stat{padding:18px 8px}.big .stat b{font-size:34px;font-weight:700}.big .stat small{font-size:13px}
 .src{color:#8f88a0;font-size:12px;margin:10px 2px 0}
 .mine{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.mine .btn{padding:20px 8px;font-size:15px;min-height:72px}
@@ -52,11 +52,31 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}.keys .btn{padding:12px 4px;font-size:13px}
 #player{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:5}
 #player video{flex:1;width:100%;min-height:0;background:#000}
+/* v1.13: home dashboard, notices, install card, splash; a sideways swipe switches tabs, never goes back a page */
+html,body{overscroll-behavior-x:none}
+.dash{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dc{background:#211b2a;border:1px solid #2e2639;border-radius:18px;padding:14px;min-width:0}.dc.full{grid-column:1/-1}
+.dc h3{margin:0 0 6px;font-size:12px;color:#a98be0;letter-spacing:.8px;text-transform:uppercase}
+.dv{font-size:26px;font-weight:700;line-height:1.15;overflow-wrap:anywhere}.dv.good{color:#6ed28c}
+.dc .btn{min-height:52px;font-size:15px}.dbtns{display:flex;gap:8px;margin-top:12px}.dbtns .btn{flex:1;min-width:0}
+.dc.alert{border-color:#e0424c;background:#2e1a22}
+button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{background:#e0424c;border-color:#e0424c;color:#fff}.dc.micon h3{color:#fff}
+.dclip{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#2a2333;border:0;padding:0;margin:4px 0 8px}
+.dclip img{width:100%;height:100%;object-fit:cover;display:block}.dclip .pb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;color:#fff;text-shadow:0 2px 10px #000}
+.pill{display:inline-block;background:#6ed28c;color:#0e2416;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-bottom:6px}
+#notes{position:fixed;top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;z-index:7;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.note{pointer-events:auto;background:#2a2238;border:1px solid #4a3d60;border-left:5px solid var(--accent);border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px #000a;animation:nin .25s ease-out}
+.note.bad{border-left-color:#ff6b6b}.note b{display:block;font-size:15px}.note small{color:#c0b8d0;font-size:13px}
+@keyframes nin{from{transform:translateY(-16px);opacity:0}to{transform:none;opacity:1}}
+#splash{position:fixed;inset:0;z-index:9;background:#16121c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .35s}
+#splash img{width:112px;height:112px}#splash b{color:var(--accent);letter-spacing:2px;font-size:18px}#splash.gone{opacity:0;pointer-events:none}
 #player .bar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#ece8f4}
 </style></head>
 <body>
+<div id="splash"><img src="app-192.png" alt=""><b>HALLOW REMOTE</b><small class="sub" id="splmsg">Connecting to your PC...</small></div>
+<div id="notes"></div>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
-<div class="tabs"><button id="t_home" class="on" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button></div>
+<div class="tabs" id="tabs"><button id="t_dash" class="on" onclick="tab('dash')">Home</button><button id="t_home" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button></div>
 <div id="v_keys" style="display:none"></div>
 <div id="v_files" style="display:none"><h2>Send to your PC</h2><div id="upoff" class="card off">Sending files is off. Turn on <b>Let your phone send files to this PC</b> in Hallow Remote on your PC.</div><div id="upon" class="card" style="display:none"><input type="file" id="upfile" multiple style="display:none" onchange="upload(this.files)"><button class="btn go" style="width:100%" id="upbtn" onclick="el('upfile').click()">Choose files</button><div class="sub" id="upmsg" style="margin-top:8px"></div></div><h2>From your PC</h2><div id="outbox"></div></div>
 <div id="v_pad" style="display:none"><div id="padoff" class="card off" style="display:none">The mouse and keyboard are off. Turn on <b>Let your phone use the mouse and keyboard</b> in Hallow Remote on your PC.</div>
@@ -66,7 +86,8 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 <div class="keys" id="keys"></div></div></div>
 <div id="v_live" style="display:none"><div class="big" id="bigstats"></div><div class="src" id="livesrc"></div><div id="lastmatch"></div></div>
 <div id="v_mine" style="display:none"><div class="mine" id="minegrid"></div><div id="mineedit"></div><button class="btn" style="width:100%;margin-top:14px" id="editbtn" onclick="toggleEdit()">Edit my buttons</button></div>
-<div id="v_home">
+<div id="v_dash"><div id="install"></div><div class="dash" id="dash"></div><div id="notecfg"></div></div>
+<div id="v_home" style="display:none">
 <div class="stats" id="stats"></div>
 <button class="mic" id="mic" style="display:none" onclick="act('a=mic')">Mic</button>
 <div id="np"></div>
@@ -98,6 +119,8 @@ var timers = {};
 function slide(ch, v) { el('p_' + ch).textContent = v + '%'; clearTimeout(timers[ch]); timers[ch] = setTimeout(function () { act('a=set&ch=' + ch + '&v=' + v, true); }, 150); }
 function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cls || '') + '">' + (v < 0 ? '-' : v + unit) + '</b><small>' + label + '</small></div>'; }
 function render(s) {
+  var sp = el('splash'); if (sp && !sp.className) { sp.className = 'gone'; setTimeout(function () { sp.style.display = 'none'; }, 400); }   // v1.13
+  if (view == 'dash') renderDash(s); notices(s);
   el('t_keys').style.display = s.keys ? '' : 'none'; var kk = JSON.stringify(s.keys); if (kk !== lastKeysState) { lastKeysState = kk; if (view == 'keys' && !hk) renderKeys(s); }
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
   if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s); if (view == 'files') renderFiles(s);
@@ -195,9 +218,11 @@ function power(what) {
   act('a=power&do=' + what);
 }
 // ---- v1.6: tabs, Live stats, My buttons
-var view = 'home', editing = false, catalog = [], mine = [];
+var view = 'dash', editing = false, catalog = [], mine = [], TABS = ['dash', 'home', 'live', 'mine', 'pad', 'files', 'keys'];
 function tab(v) {
-  view = v; ['home', 'live', 'mine', 'pad', 'keys', 'files'].forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
+  view = v; try { localStorage.setItem('hr_tab', v); } catch (e) { }
+  var tb = el('t_' + v); if (tb && tb.scrollIntoView) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  TABS.forEach(function (x) { el('v_' + x).style.display = x == v ? '' : 'none'; el('t_' + x).className = x == v ? 'on' : ''; });
   if (v == 'mine' && !catalog.length) loadButtons();
   if (last) render(last);
   if (v == 'keys' && last) renderKeys(last);
@@ -552,7 +577,147 @@ function hkGenOpen() {
   hkGenFill();
 }
 function hkGenFill() { var e = el('hkf_pw'); if (!e) return; e.value = hkGenerate(hkGen); e.type = 'text'; hkTouch(); }
-if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () { });
+var swReg = null;
+if (location.protocol === 'https:' && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').then(function (r) { swReg = r; renderNoteCfg(); }).catch(function () { });
+// ---- v1.13: the Home dashboard - the things you reach for most, as big cards
+var lastDash = '', armedDash = {};
+function playingGame(s) {
+  var g = (s.games || []).filter(function (x) { return x.playing; })[0];
+  return g ? g.name : (s.mixer && s.mixer.game) || (s.overlay && s.overlay.live && s.overlay.live.game) || (s.clips && s.clips.recording && s.clips.game) || null;
+}
+function renderDash(s) {
+  var k = JSON.stringify([s.games, s.hub, s.mixer && s.mixer.mic, s.mixer && s.mixer.nowPlaying, s.mixer && s.mixer.game, s.sys && s.sys.np, s.overlay, s.session, s.clips, s.vault, s.guard, s.assist, !!armedDash.disc]);
+  if (k === lastDash) return; lastDash = k;
+  var h = '', game = playingGame(s), q = function (x) { return esc(x).replace(/'/g, ''); };
+  // what's running
+  h += '<div class="dc full" id="d_game"><h3>Game</h3>';
+  if (game) {
+    var lv = s.overlay && s.overlay.live;
+    h += '<span class="pill">PLAYING</span><div class="dv">' + esc(game) + '</div>' + (lv && (lv.fps != null || lv.ping != null) ? '<div class="sub">' + [lv.fps != null ? lv.fps + ' FPS' : '', lv.ping != null ? lv.ping + ' ms' : '', lv.region || ''].filter(Boolean).map(esc).join(' - ') + '</div>' : '');
+    h += '<div class="dbtns">' + (s.clips ? '<button class="btn go" id="d_clip" onclick="saveClipDash()">Save clip</button>' : '') + (s.session != null ? '<button class="btn" onclick="act(\'a=session\')">' + (s.session ? 'End session' : 'Game session') + '</button>' : '') + '</div>';
+  } else if (s.hub && (s.games || []).length) {
+    h += '<div class="sub">No game running. Start one:</div><div class="dbtns">' + s.games.slice(0, 2).map(function (x, i) { return '<button class="btn" onclick="play(' + i + ',\'' + q(x.name) + '\')">' + esc(x.name) + '</button>'; }).join('') + '</div>';
+  } else h += '<div class="sub">No game running.</div>';
+  h += '</div>';
+  // mic and Guard side by side
+  var halves = [];
+  if (s.mixer) halves.push('<button class="dc' + (s.mixer.mic.muted ? ' micon' : '') + '" id="d_mic" onclick="act(\'a=mic\')"><h3>Mic</h3><div class="dv">' + (s.mixer.mic.muted ? 'Muted' : 'On') + '</div><div class="sub" style="color:inherit;opacity:.8">Tap to ' + (s.mixer.mic.muted ? 'talk' : 'mute') + '</div></button>');
+  var gd = s.guard;
+  if (gd) {
+    var gc = gd.score == null ? '' : gd.score >= 80 ? 'good' : gd.score >= 60 ? 'warn' : 'bad';
+    halves.push('<div class="dc" id="d_guard"><h3>Guard</h3><div class="dv ' + gc + '">' + (gd.score == null ? '-' : gd.score) + '</div><div class="sub">' + esc(gd.label || 'Safety score') + '</div>' +
+      '<div class="sub">' + (gd.threats ? '<span class="bad">' + gd.threats + (gd.threats == 1 ? ' threat' : ' threats') + ' in history</span>' : gd.lastScan ? 'Scanned ' + esc(gd.lastScan) : 'No scan yet') + '</div>' +
+      '<div class="dbtns"><button class="btn' + (gd.scanning ? '' : ' go') + '" id="d_scan" ' + (gd.scanning ? 'disabled' : '') + ' onclick="act(\'a=guard&do=scan\')">' + (gd.scanning ? 'Scanning...' : 'Quick scan') + '</button></div></div>');
+  }
+  if (halves.length == 1) halves[0] = halves[0].replace('class="dc', 'class="dc full');
+  h += halves.join('');
+  // now playing
+  var np = s.mixer && s.mixer.nowPlaying, pre = 'a=media';
+  if (!np && s.sys && s.sys.np) { np = s.sys.np; pre = 'a=pcmedia'; }
+  if (np) h += '<div class="dc full" id="d_np"><h3>Now playing</h3><div class="dv" style="font-size:19px">' + esc(np.title) + '</div><div class="sub">' + esc([np.artist, np.app].filter(Boolean).join(' - ')) + '</div>' +
+    '<div class="dbtns"><button class="btn" onclick="act(\'' + pre + '&do=prev\')" aria-label="Previous">&#9198;</button><button class="btn go" style="flex:2" onclick="act(\'' + pre + '&do=playpause\')">' + (np.playing ? 'Pause' : 'Play') + '</button><button class="btn" onclick="act(\'' + pre + '&do=next\')" aria-label="Next">&#9197;</button></div></div>';
+  // the last clip
+  var c = s.clips && s.clips.items[0];
+  if (c) h += '<div class="dc full" id="d_lastclip"><h3>Last clip</h3><button class="dclip" onclick="watch(\'' + c.id + '\',\'' + q(c.game || 'Clip') + '\')">' + (c.thumb ? '<img src="' + base + 'api/thumb/' + c.id + '" alt="">' : '') + '<span class="pb">&#9654;</span></button><b>' + esc(c.game || 'Clip') + '</b> <span class="sub">' + esc(c.when || '') + ' - ' + dur(c.sec) + '</span></div>';
+  // remote help (Hallow Assist)
+  var as = s.assist;
+  if (as) {
+    var busy = as.session != 'none' || as.helping, conn = as.session == 'connected';
+    var txt = conn ? 'Someone is connected to this PC' + (as.unattended ? ' (unattended access)' : '') : as.session == 'asking' ? 'Someone is asking to connect - answer on the PC' : as.session == 'waiting' ? 'Get help is on - waiting for your helper' : as.helping ? 'You\'re helping someone from this PC' : 'Nobody is connected';
+    h += '<div class="dc full' + (conn || as.session == 'asking' ? ' alert' : '') + '" id="d_assist"><h3>Remote help</h3><div class="dv" style="font-size:18px">' + esc(txt) + '</div><div class="dbtns">' +
+      (busy ? '<button class="btn on" id="d_disc" onclick="disconnectDash()">' + (armedDash.disc ? 'Tap again to disconnect' : 'Disconnect') + '</button>' : '<button class="btn" id="d_gethelp" onclick="act(\'a=assist&do=open\')">Get help on this PC</button>') + '</div></div>';
+  }
+  // saves (Hallow Vault)
+  var v = s.vault;
+  if (v) { var lastG = v.games.filter(function (g) { return g.last; })[0]; h += '<div class="dc full" id="d_vault"><h3>Saves</h3><div class="sub">' + (v.busy ? 'Backing up now...' : lastG ? 'Last backup: ' + esc(lastG.name) + ', ' + esc(lastG.last) : 'No backups yet') + '</div><div class="dbtns"><button class="btn" ' + (v.busy ? 'disabled' : '') + ' onclick="act(\'a=backup\')">Back up now</button></div></div>'; }
+  if (!s.mixer && !gd && !as && !v && !s.clips && !np) h += '<div class="dc full off">Start Hallow Mixer, Clips, Vault, Guard or Assist on your PC and they show up here.</div>';
+  el('dash').innerHTML = h;
+}
+function saveClipDash() { var b = el('d_clip'); if (b) { b.disabled = true; b.textContent = 'Saving...'; } act('a=clip').then(function () { lastDash = ''; }); }
+function disconnectDash() {
+  if (!armedDash.disc) { armedDash.disc = setTimeout(function () { armedDash.disc = 0; lastDash = ''; if (last) renderDash(last); }, 4000); lastDash = ''; renderDash(last); return; }
+  clearTimeout(armedDash.disc); armedDash.disc = 0; lastDash = ''; act('a=assist&do=disconnect');
+}
+// ---- v1.13: notices while the page is open - from the same live updates (clip saved, backup done, damaged backups, threats, remote help)
+var prevS = null, notifyOn = false;
+try { notifyOn = localStorage.getItem('hr_notify') === '1'; } catch (e) { }
+function notices(s) {
+  var p = prevS; prevS = s; if (!p) return;
+  var out = [];
+  var pc = p.clips ? p.clips.items : [], c = s.clips && s.clips.items[0];
+  if (c && p.clips && !pc.some(function (x) { return x.id === c.id; })) out.push({ t: 'Clip saved', b: (c.game || 'Clip') + ' - ' + dur(c.sec), tag: 'clip', go: function () { watch(c.id, c.game || 'Clip'); } });
+  if (p.vault && s.vault) {
+    if (p.vault.busy && !s.vault.busy) out.push({ t: 'Backup finished', b: 'Hallow Vault is done backing up your saves', tag: 'vault' });
+    if ((s.vault.damaged || 0) > (p.vault.damaged || 0)) out.push({ t: 'Backup problem', b: 'Hallow Vault found a damaged backup - check Hallow Vault on your PC', tag: 'vault-bad', bad: true });
+  }
+  if (p.guard && s.guard) {
+    var more = (s.guard.threats || 0) > (p.guard.threats || 0);
+    if (more) out.push({ t: 'Threat found', b: 'Microsoft Defender found ' + ((s.guard.threats || 0) - (p.guard.threats || 0) == 1 ? 'a threat' : 'threats') + ' - see Hallow Guard on your PC', tag: 'guard-bad', bad: true });
+    if (p.guard.scanning && !s.guard.scanning && !more) out.push(s.guard.lastResult == 'threats' ? { t: 'Threat found', b: 'The scan found something - see Hallow Guard on your PC', tag: 'guard-bad', bad: true } : { t: 'Scan finished', b: s.guard.lastResult == 'clean' ? 'Nothing found' : s.guard.lastResult == 'cancelled' ? 'The scan was stopped' : 'Hallow Guard finished scanning', tag: 'guard' });
+  }
+  if (p.assist && s.assist && p.assist.session != s.assist.session) {
+    var a = s.assist.session;
+    if (a == 'asking') out.push({ t: 'Remote help', b: 'Someone is asking to connect to your PC', tag: 'assist', bad: true });
+    else if (a == 'connected') out.push({ t: 'Remote help', b: 'Someone is connected to your PC', tag: 'assist', bad: true });
+    else if (a == 'none' && p.assist.session == 'connected') out.push({ t: 'Remote help', b: 'The session ended', tag: 'assist' });
+  }
+  out.forEach(note);
+}
+function note(n) {
+  var box = el('notes'), d = document.createElement('div');
+  d.className = 'note' + (n.bad ? ' bad' : ''); d.innerHTML = '<b>' + esc(n.t) + '</b><small>' + esc(n.b) + '</small>';
+  d.onclick = function () { d.remove(); if (n.go) n.go(); else tab('dash'); };
+  box.insertBefore(d, box.firstChild); while (box.children.length > 3) box.lastChild.remove();
+  setTimeout(function () { d.remove(); }, n.bad ? 12000 : 7000);
+  try { if (navigator.vibrate) navigator.vibrate(n.bad ? [80, 60, 80] : 60); } catch (e) { }
+  // as a phone notification too, when you turned that on and the page isn't in front
+  if (notifyOn && document.hidden && swReg && window.Notification && Notification.permission === 'granted')
+    swReg.showNotification(n.t, { body: n.b, tag: 'hallow-' + n.tag, icon: 'app-192.png', badge: 'app-192.png', renotify: true }).catch(function () { });
+}
+function renderNoteCfg() {
+  var e = el('notecfg'); if (!e) return;
+  var can = location.protocol === 'https:' && !!swReg && !!window.Notification, granted = can && Notification.permission === 'granted';
+  e.innerHTML = '<h2>Notices</h2><div class="card sub">Clip saved, backups done or damaged, threats and remote help show at the top while this page is open.' +
+    (can ? '<div class="dbtns"><button class="btn' + (notifyOn && granted ? ' go' : '') + '" id="notebtn" onclick="toggleNotify()">' + (notifyOn && granted ? 'Phone notifications: on' : 'Also as phone notifications') + '</button></div><div style="margin-top:6px">Only while the page is still open in the background - nothing goes through Google or Apple.</div>'
+      : '<div style="margin-top:6px">Phone notifications need the https link (see HTTPS in Hallow Remote on your PC).</div>') + '</div>';
+}
+function toggleNotify() {
+  if (notifyOn && Notification.permission === 'granted') { notifyOn = false; try { localStorage.setItem('hr_notify', '0'); } catch (e) { } renderNoteCfg(); return; }
+  Notification.requestPermission().then(function (p) { notifyOn = p === 'granted'; try { localStorage.setItem('hr_notify', notifyOn ? '1' : '0'); } catch (e) { } if (!notifyOn) toast('Notifications are blocked - allow them in your browser\'s site settings'); renderNoteCfg(); });
+}
+// ---- v1.13: Add to Home Screen
+var installEvt = null;
+window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; renderInstall(); });
+window.addEventListener('appinstalled', function () { installEvt = null; hideInstall(); });
+function standalone() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+function hideInstall() { try { localStorage.setItem('hr_install_hidden', '1'); } catch (e) { } el('install').innerHTML = ''; }
+function doInstall() { if (!installEvt) return; installEvt.prompt(); installEvt.userChoice.then(function (c) { if (c.outcome == 'accepted') hideInstall(); }); }
+function renderInstall() {
+  var hidden = false; try { hidden = localStorage.getItem('hr_install_hidden') === '1'; } catch (e) { }
+  if (standalone() || hidden) { el('install').innerHTML = ''; return; }
+  var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var how = installEvt ? 'Install it as an app - it opens full screen, with its own icon.' : ios ? 'In Safari, tap <b>Share</b> (the square with the arrow), then <b>Add to Home Screen</b>.' : 'Open your browser\'s menu (<b>&#8942;</b>) and tap <b>Install app</b> or <b>Add to Home screen</b>.';
+  el('install').innerHTML = '<div class="card" style="margin-bottom:10px" id="installcard"><b>Put Hallow Remote on your home screen</b><div class="sub" style="margin-top:4px">' + how + ' Keep the link private - it\'s the key to your PC.</div><div class="dbtns">' +
+    (installEvt ? '<button class="btn go" onclick="doInstall()">Install</button>' : '') + '<button class="btn" onclick="hideInstall()">Not now</button></div></div>';
+}
+// ---- v1.13: swipe left / right between tabs (not on the trackpad, sliders, text boxes, the tab row or the video)
+(function () {
+  var sx = 0, sy = 0, st = 0, ok = false;
+  document.addEventListener('touchstart', function (e) { var t = e.touches[0]; ok = e.touches.length == 1 && !(e.target.closest && e.target.closest('#pad,input,textarea,select,#player,.tabs,.games')); sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
+  document.addEventListener('touchend', function (e) {
+    if (!ok) return; ok = false; var t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+    if (Date.now() - st > 700 || Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.6) return;
+    var vis = TABS.filter(function (x) { return el('t_' + x).style.display != 'none'; }), i = vis.indexOf(view) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < vis.length) tab(vis[i]);
+  }, { passive: true });
+})();
+(function () {   // the tab to open: ?tab=... (home-screen shortcuts), else the one you used last (never straight into Keys)
+  var m = /[?&]tab=(\w+)/.exec(location.search), t = m ? m[1] : null; if (!t) try { t = localStorage.getItem('hr_tab'); } catch (e) { }
+  if (t && t !== 'keys' && TABS.indexOf(t) >= 0) tab(t);
+  renderInstall(); renderNoteCfg();
+  setTimeout(function () { var m2 = el('splmsg'); if (m2 && !last) m2.textContent = 'Still trying to reach your PC...'; }, 4000);
+  setTimeout(function () { var sp = el('splash'); if (sp && !last) { sp.className = 'gone'; setTimeout(function () { sp.style.display = 'none'; }, 400); } }, 8000);
+})();
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })
@@ -564,7 +729,7 @@ var rev = 0, liveRun = 0, polling = false;
 function live() {
   var run = ++liveRun;
   (function next() {
-    if (run !== liveRun || document.hidden) return;
+    if (run !== liveRun || (document.hidden && !notifyOn)) return;   // v1.13: keeps listening in the background only for phone notifications
     fetch(base + 'api/wait?rev=' + rev + (view == 'live' ? '&fast=1' : ''), { cache: 'no-store' }).then(function (r) { if (r.status == 404) throw 'old'; return r.json(); })
       .then(function (s) { if (run !== liveRun) return; rev = s.rev; last = s; render(s); next(); })
       .catch(function (e) {
