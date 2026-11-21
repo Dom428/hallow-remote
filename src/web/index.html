@@ -63,6 +63,11 @@ html,body{overscroll-behavior-x:none}
 button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{background:#e0424c;border-color:#e0424c;color:#fff}.dc.micon h3{color:#fff}
 .dclip{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#2a2333;border:0;padding:0;margin:4px 0 8px}
 .dclip img{width:100%;height:100%;object-fit:cover;display:block}.dclip .pb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;color:#fff;text-shadow:0 2px 10px #000}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:#5a5366;vertical-align:middle}.dot.waiting{background:#6ed28c}.dot.busy{background:#f0be5a}.dot.unknown{background:transparent;border:1.5px solid #8f88a0;width:7px;height:7px}
+.pcr{display:flex;align-items:center;gap:8px;margin:8px 0}.pcr b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.pcr .btn{min-height:44px;font-size:14px;flex:0 0 auto}
+.apr{display:flex;align-items:center;gap:8px;margin:2px 0 8px 14px;font-size:13px}.apr .an{width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c0b8d0}.apr input[type=range]{height:24px}.apr .btn{min-height:36px;padding:6px 10px;font-size:13px}
+.apr select{background:#2a2333;color:#ece8f4;border:1px solid #3a3248;border-radius:10px;padding:7px 4px;font-size:13px;max-width:84px}
+.warn{color:#f0be5a}.good{color:#6ed28c}.kv{display:flex;justify-content:space-between;margin:6px 0}.kv span{color:#8f88a0}
 .pill{display:inline-block;background:#6ed28c;color:#0e2416;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-bottom:6px}
 #notes{position:fixed;top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;z-index:7;display:flex;flex-direction:column;gap:8px;pointer-events:none}
 .note{pointer-events:auto;background:#2a2238;border:1px solid #4a3d60;border-left:5px solid var(--accent);border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px #000a;animation:nin .25s ease-out}
@@ -76,7 +81,7 @@ button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{backgr
 <div id="splash"><img src="app-192.png" alt=""><b>HALLOW REMOTE</b><small class="sub" id="splmsg">Connecting to your PC...</small></div>
 <div id="notes"></div>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
-<div class="tabs" id="tabs"><button id="t_dash" class="on" onclick="tab('dash')">Home</button><button id="t_home" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button></div>
+<div class="tabs" id="tabs"><button id="t_dash" class="on" onclick="tab('dash')">Home</button><button id="t_home" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button><button id="t_fam" onclick="tab('fam')" style="display:none">Family</button></div>
 <div id="v_keys" style="display:none"></div>
 <div id="v_files" style="display:none"><h2>Send to your PC</h2><div id="upoff" class="card off">Sending files is off. Turn on <b>Let your phone send files to this PC</b> in Hallow Remote on your PC.</div><div id="upon" class="card" style="display:none"><input type="file" id="upfile" multiple style="display:none" onchange="upload(this.files)"><button class="btn go" style="width:100%" id="upbtn" onclick="el('upfile').click()">Choose files</button><div class="sub" id="upmsg" style="margin-top:8px"></div></div><h2>From your PC</h2><div id="outbox"></div></div>
 <div id="v_pad" style="display:none"><div id="padoff" class="card off" style="display:none">The mouse and keyboard are off. Turn on <b>Let your phone use the mouse and keyboard</b> in Hallow Remote on your PC.</div>
@@ -86,6 +91,7 @@ button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{backgr
 <div class="keys" id="keys"></div></div></div>
 <div id="v_live" style="display:none"><div class="big" id="bigstats"></div><div class="src" id="livesrc"></div><div id="lastmatch"></div></div>
 <div id="v_mine" style="display:none"><div class="mine" id="minegrid"></div><div id="mineedit"></div><button class="btn" style="width:100%;margin-top:14px" id="editbtn" onclick="toggleEdit()">Edit my buttons</button></div>
+<div id="v_fam" style="display:none"></div>
 <div id="v_dash"><div id="install"></div><div class="dash" id="dash"></div><div id="notecfg"></div></div>
 <div id="v_home" style="display:none">
 <div class="stats" id="stats"></div>
@@ -115,7 +121,26 @@ function act(q, quiet) {
   return fetch(base + 'api/do?' + q, { cache: 'no-store' }).then(function (r) { return r.json(); })
     .then(function (j) { if (!quiet || !j.ok) toast(j.msg); setTimeout(load, 300); }).catch(function () { toast('Your PC didn\'t answer'); });
 }
-var timers = {};
+var timers = {}, mxApps = [];
+// ---- v1.15: per-app volume under each Mixer channel (only when Mixer shares "apps"); the PC only accepts keys Mixer lists
+function appRows(mx, ch) {
+  if (!mx.apps) return '';
+  if (ch == mx.channels[0].id) mxApps = mx.apps.slice();
+  var opts = mx.channels.map(function (c) { return c.id; }), h = '';
+  mx.apps.forEach(function (a) {
+    if (a.channel != ch && !(ch == 'other' && opts.indexOf(a.channel) < 0)) return;
+    var i = mxApps.indexOf(a); if (i < 0) { mxApps.push(a); i = mxApps.length - 1; }
+    h += '<div class="apr"><span class="an" title="' + esc(a.name) + '">' + (a.playing ? '&#9835; ' : '') + esc(a.name) + '</span>' +
+      '<input type="range" min="0" max="100" value="' + a.volume + '" style="--c:' + (colors[ch] || '#f07820') + '" ontouchstart="dragging.a' + i + '=1" ontouchend="dragging.a' + i + '=0" onmousedown="dragging.a' + i + '=1" onmouseup="dragging.a' + i + '=0" oninput="appVol(' + i + ',this.value)">' +
+      '<span class="p" id="pa_' + i + '" style="width:36px;text-align:right;color:#8f88a0">' + a.volume + '%</span>' +
+      '<button class="btn' + (a.muted ? ' on' : '') + '" onclick="appDo(' + i + ',\'m=toggle\')">' + (a.muted ? 'Muted' : 'Mute') + '</button>' +
+      '<select aria-label="Move to channel" onfocus="dragging.sel=1" onblur="dragging.sel=0" onchange="dragging.sel=0;appDo(' + i + ',\'ch=\'+this.value)"><option value="" selected disabled>Move</option>' +
+      mx.channels.filter(function (c) { return c.id != a.channel; }).map(function (c) { return '<option value="' + c.id + '">' + esc(c.name.replace('System & other', 'System')) + '</option>'; }).join('') + '</select></div>';
+  });
+  return h;
+}
+function appDo(i, q) { var a = mxApps[i]; if (!a) return; act('a=app&key=' + encodeURIComponent(a.key) + '&' + q); }
+function appVol(i, v) { var p = el('pa_' + i); if (p) p.textContent = v + '%'; clearTimeout(timers['a' + i]); timers['a' + i] = setTimeout(function () { appDo(i, 'v=' + v); }, 150); }
 function slide(ch, v) { el('p_' + ch).textContent = v + '%'; clearTimeout(timers[ch]); timers[ch] = setTimeout(function () { act('a=set&ch=' + ch + '&v=' + v, true); }, 150); }
 function stat(label, v, unit, cls) { return '<div class="stat"><b class="' + (cls || '') + '">' + (v < 0 ? '-' : v + unit) + '</b><small>' + label + '</small></div>'; }
 function render(s) {
@@ -124,6 +149,7 @@ function render(s) {
   el('t_keys').style.display = s.keys ? '' : 'none'; var kk = JSON.stringify(s.keys); if (kk !== lastKeysState) { lastKeysState = kk; if (view == 'keys' && !hk) renderKeys(s); }
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
   if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s); if (view == 'files') renderFiles(s);
+  var hasFam = !!(s.guard || s.shield || (s.assist && s.assist.pcs)); el('t_fam').style.display = hasFam ? '' : 'none'; if (view == 'fam') { if (hasFam) renderFam(s); else tab('dash'); }   // v1.15
   if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
   el('pc').textContent = s.pc; el('time').textContent = s.time;
   var t = s.stats, ram = t.ramTotal > 0 ? t.ramUsed / t.ramTotal : 0;
@@ -142,6 +168,7 @@ function render(s) {
         h += '<div class="row"><span class="n" style="color:' + (colors[c.id] || '#ece8f4') + '">' + esc(c.name.replace('System & other', 'System')) + '</span>' +
           '<input type="range" min="0" max="100" value="' + c.volume + '" style="--c:' + (colors[c.id] || '#f07820') + '" ontouchstart="dragging.' + c.id + '=1" ontouchend="dragging.' + c.id + '=0" onmousedown="dragging.' + c.id + '=1" onmouseup="dragging.' + c.id + '=0" oninput="slide(\'' + c.id + '\',this.value)">' +
           '<span class="p" id="p_' + c.id + '">' + c.volume + '%</span><button class="btn m' + (c.muted ? ' on' : '') + '" onclick="act(\'a=mute&ch=' + c.id + '\')">' + (c.muted ? 'Muted' : 'Mute') + '</button></div>';
+        h += appRows(mx, c.id);   // v1.15: the apps in this channel (Mixer 3.24+)
       });
       h += '</div>';
       if (mx.presets && mx.presets.length) h += '<h2>Presets</h2><div class="chips">' + mx.presets.map(function (p) { return '<button class="btn go" onclick="act(\'a=preset&name=' + encodeURIComponent(p) + '\')">' + esc(p) + '</button>'; }).join('') + '</div>';
@@ -218,7 +245,7 @@ function power(what) {
   act('a=power&do=' + what);
 }
 // ---- v1.6: tabs, Live stats, My buttons
-var view = 'dash', editing = false, catalog = [], mine = [], TABS = ['dash', 'home', 'live', 'mine', 'pad', 'files', 'keys'];
+var view = 'dash', editing = false, catalog = [], mine = [], TABS = ['dash', 'home', 'live', 'mine', 'pad', 'files', 'keys', 'fam'];
 function tab(v) {
   view = v; try { localStorage.setItem('hr_tab', v); } catch (e) { }
   var tb = el('t_' + v); if (tb && tb.scrollIntoView) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -586,7 +613,7 @@ function playingGame(s) {
   return g ? g.name : (s.mixer && s.mixer.game) || (s.overlay && s.overlay.live && s.overlay.live.game) || (s.clips && s.clips.recording && s.clips.game) || null;
 }
 function renderDash(s) {
-  var k = JSON.stringify([s.games, s.hub, s.mixer && s.mixer.mic, s.mixer && s.mixer.nowPlaying, s.mixer && s.mixer.game, s.sys && s.sys.np, s.overlay, s.session, s.clips, s.vault, s.guard, s.assist, !!armedDash.disc]);
+  var k = JSON.stringify([s.games, s.hub, s.mixer && s.mixer.mic, s.mixer && s.mixer.nowPlaying, s.mixer && s.mixer.game, s.sys && s.sys.np, s.overlay, s.session, s.clips, s.vault, s.guard, s.assist, s.shield, !!armedDash.disc]);
   if (k === lastDash) return; lastDash = k;
   var h = '', game = playingGame(s), q = function (x) { return esc(x).replace(/'/g, ''); };
   // what's running
@@ -606,11 +633,16 @@ function renderDash(s) {
   if (gd) {
     var gc = gd.score == null ? '' : gd.score >= 80 ? 'good' : gd.score >= 60 ? 'warn' : 'bad';
     halves.push('<div class="dc" id="d_guard"><h3>Guard</h3><div class="dv ' + gc + '">' + (gd.score == null ? '-' : gd.score) + '</div><div class="sub">' + esc(gd.label || 'Safety score') + '</div>' +
-      '<div class="sub">' + (gd.threats ? '<span class="bad">' + gd.threats + (gd.threats == 1 ? ' threat' : ' threats') + ' in history</span>' : gd.lastScan ? 'Scanned ' + esc(gd.lastScan) : 'No scan yet') + '</div>' +
+      '<div class="sub">' + (gd.threats ? '<span class="bad">' + gd.threats + (gd.threats == 1 ? ' threat' : ' threats') + ' in history</span>' : gd.lastScan ? 'Scanned ' + esc(gd.lastScan) : 'No scan yet') + '</div>' + guardWeekLine(gd) +
       '<div class="dbtns"><button class="btn' + (gd.scanning ? '' : ' go') + '" id="d_scan" ' + (gd.scanning ? 'disabled' : '') + ' onclick="act(\'a=guard&do=scan\')">' + (gd.scanning ? 'Scanning...' : 'Quick scan') + '</button></div></div>');
   }
   if (halves.length == 1) halves[0] = halves[0].replace('class="dc', 'class="dc full');
   h += halves.join('');
+  // v1.15: Hallow Shield's blocked counts, and your own PCs (Hallow Assist)
+  var sh = s.shield;
+  if (sh) h += '<div class="dc full" id="d_shield"><h3>Blocked</h3>' + (sh.sharing ? '<div class="dv good">' + num(sh.today) + ' <span class="sub" style="font-size:14px;font-weight:400">today</span></div><div class="sub">' + num(sh.week) + ' this week' + (sh.old && sh.updated ? ' (as of ' + esc(sh.updated) + ')' : '') + ' - Hallow Shield</div>' : shieldHowTo()) + '</div>';
+  var pcs = s.assist && s.assist.pcs;
+  if (pcs && pcs.length) h += '<div class="dc full" id="d_pcs"><h3>Your PCs</h3>' + pcRows(pcs.slice(0, 3)) + (pcs.length > 3 ? '<div class="sub">+' + (pcs.length - 3) + ' more on the Family tab</div>' : '') + '</div>';
   // now playing
   var np = s.mixer && s.mixer.nowPlaying, pre = 'a=media';
   if (!np && s.sys && s.sys.np) { np = s.sys.np; pre = 'a=pcmedia'; }
@@ -630,8 +662,58 @@ function renderDash(s) {
   // saves (Hallow Vault)
   var v = s.vault;
   if (v) { var lastG = v.games.filter(function (g) { return g.last; })[0]; h += '<div class="dc full" id="d_vault"><h3>Saves</h3><div class="sub">' + (v.busy ? 'Backing up now...' : lastG ? 'Last backup: ' + esc(lastG.name) + ', ' + esc(lastG.last) : 'No backups yet') + '</div><div class="dbtns"><button class="btn" ' + (v.busy ? 'disabled' : '') + ' onclick="act(\'a=backup\')">Back up now</button></div></div>'; }
-  if (!s.mixer && !gd && !as && !v && !s.clips && !np) h += '<div class="dc full off">Start Hallow Mixer, Clips, Vault, Guard or Assist on your PC and they show up here.</div>';
+  if (!s.mixer && !gd && !as && !v && !s.clips && !np && !sh) h += '<div class="dc full off">Start Hallow Mixer, Clips, Vault, Guard or Assist on your PC and they show up here.</div>';
   el('dash').innerHTML = h;
+}
+// ---- v1.15: Guard's week, Shield, your PCs, and the Family tab
+function num(n) { return n == null ? '-' : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+function guardWeekLine(gd) {
+  var r = gd.report, hd = gd.hardening, out = [];
+  if (r) out.push(r.delta == null ? 'First weekly report' : r.delta > 0 ? '<span class="good">+' + r.delta + ' this week</span>' : r.delta < 0 ? '<span class="warn">' + r.delta + ' this week</span>' : 'Same as last week');
+  if (hd && hd.warnings != null) out.push(hd.warnings ? '<span class="warn">' + hd.warnings + (hd.warnings == 1 ? ' hardening warning' : ' hardening warnings') + '</span>' : 'Hardening OK');
+  else if (hd && hd.score != null) out.push(hd.score < 100 ? '<span class="' + (hd.score < 70 ? 'warn' : '') + '">Hardening ' + hd.score + '/100</span>' : 'Hardening OK');
+  return out.length ? '<div class="sub">' + out.join(' - ') + '</div>' : '';
+}
+function shieldHowTo() { return '<div class="sub"><b style="color:#ece8f4">Shield isn\'t sharing counts.</b> In Shield 1.6 or newer: options page Update Hallow Shield to 1.6 and turn on <b>Share counts with the Hallow apps</b> in its options.gt; Stats Update Hallow Shield to 1.6 and turn on <b>Share counts with the Hallow apps</b> in its options.gt; turn on <b>Share counts with Hallow apps on this PC</b> (Hallow Setup 1.8 sets up its bridge).</div>'; }
+function pcRows(pcs) {
+  return pcs.map(function (p) {
+    var t = p.online == 'waiting' ? 'Online' : p.online == 'busy' ? 'In a session' : p.online == 'offline' ? 'Offline' : 'Not checked yet';
+    return '<div class="pcr"><span class="dot ' + esc(p.online) + '" title="' + t + '"></span><b>' + esc(p.name) + '</b><button class="btn" ' + (p.online == 'offline' ? 'disabled ' : '') + 'onclick="openPc(this)" data-n="' + esc(p.name) + '">Open on PC</button></div>';
+  }).join('');
+}
+function openPc(b) { var n = b.getAttribute('data-n'); b.disabled = true; act('a=assist&do=connect&name=' + encodeURIComponent(n)).then(function () { lastDash = ''; lastFam = ''; }); }
+var lastFam = '';
+function renderFam(s) {
+  var k = JSON.stringify([s.guard, s.shield, s.assist && s.assist.pcs]); if (k === lastFam) return; lastFam = k;
+  var h = '', gd = s.guard;
+  if (gd) {
+    var r = gd.report, hd = gd.hardening;
+    h += '<h2>Hallow Guard</h2><div class="card">';
+    h += '<div class="kv"><b>Safety score</b><b>' + (gd.score == null ? '-' : gd.score) + (gd.familyScore != null ? ' <span class="sub">/ family ' + gd.familyScore + '</span>' : '') + '</b></div>';
+    if (r) {
+      h += '<div style="margin-top:10px"><b>' + esc(r.headline || 'Weekly report') + '</b><div class="sub">' + esc([r.week ? 'Week ' + r.week.replace(/^\d{4}-/, '') : '', r.when].filter(Boolean).join(' - ')) + '</div></div>';
+      h += '<div class="kv"><span>Score</span><span style="color:#ece8f4">' + (r.previous != null ? r.previous + ' &rarr; ' : '') + (r.score == null ? '-' : r.score) + (r.delta ? ' (' + (r.delta > 0 ? '+' : '') + r.delta + ')' : '') + '</span></div>';
+      h += '<div class="kv"><span>Fixed this week</span><span style="color:#ece8f4">' + r.fixed + '</span></div><div class="kv"><span>New this week</span><span class="' + (r.newIssues ? 'warn' : '') + '" style="' + (r.newIssues ? '' : 'color:#ece8f4') + '">' + r.newIssues + '</span></div>';
+      h += '<div class="kv"><span>Still to look at</span><span style="color:#ece8f4">' + r.issues + '</span></div><div class="kv"><span>Scans</span><span style="color:#ece8f4">' + r.scans + '</span></div>';
+      if (r.summary) h += '<div class="sub" style="margin-top:6px">' + esc(r.summary) + '</div>';
+    } else h += '<div class="sub" style="margin-top:8px">No weekly report yet.</div>';
+    if (hd) h += '<div class="kv" style="margin-top:10px"><span>Windows hardening</span><span class="' + (hd.warnings ? 'warn' : '') + '" style="' + (hd.warnings ? '' : 'color:#ece8f4') + '">' + (hd.warnings != null ? (hd.warnings ? hd.warnings + (hd.warnings == 1 ? ' warning' : ' warnings') : 'OK') + (hd.score != null ? ' - ' + hd.score + '/100' : '') : hd.score + '/100') + '</span></div>';
+    h += '<div class="dbtns"><button class="btn" onclick="act(\'a=guard&do=report\')">Open report on PC</button>' + (hd ? '<button class="btn" onclick="act(\'a=guard&do=hardening\')">Hardening on PC</button>' : '') + '</div></div>';
+  }
+  var sh = s.shield;
+  if (sh) {
+    h += '<h2>Hallow Shield</h2><div class="card">';
+    if (!sh.sharing) h += shieldHowTo();
+    else {
+      h += '<div class="kv"><b>Blocked today</b><b class="good">' + num(sh.today) + '</b></div><div class="kv"><span>This week</span><span style="color:#ece8f4">' + num(sh.week) + '</span></div>' + (sh.banners != null ? '<div class="kv"><span>Cookie banners today</span><span style="color:#ece8f4">' + num(sh.banners) + '</span></div>' : '');
+      (sh.browsers || []).forEach(function (b) { h += '<div class="kv"><span>' + esc([b.name, b.profile && b.profile != 'Default' ? b.profile : ''].filter(Boolean).join(' - ')) + (b.level ? ' <small>(' + esc(b.level) + ')</small>' : '') + '</span><span style="color:#ece8f4">' + num(b.today) + ' / ' + num(b.week) + '</span></div>'; });
+      if (sh.browsers && sh.browsers.length) h += '<div class="sub">Per browser: today / this week' + (sh.updated ? ' - updated ' + esc(sh.updated) : '') + '</div>';
+    }
+    h += '</div>';
+  }
+  var pcs = s.assist && s.assist.pcs;
+  if (pcs) h += '<h2>Your PCs</h2><div class="card">' + (pcs.length ? pcRows(pcs) + '<div class="sub" style="margin-top:6px">Open on PC opens Hallow Assist with that PC picked - you click Connect there.</div>' : '<div class="sub">No PCs of your own in Hallow Assist yet.</div>') + '</div>';
+  el('v_fam').innerHTML = h;
 }
 function saveClipDash() { var b = el('d_clip'); if (b) { b.disabled = true; b.textContent = 'Saving...'; } act('a=clip').then(function () { lastDash = ''; }); }
 function disconnectDash() {
@@ -713,7 +795,7 @@ function renderInstall() {
 })();
 (function () {   // the tab to open: ?tab=... (home-screen shortcuts), else the one you used last (never straight into Keys)
   var m = /[?&]tab=(\w+)/.exec(location.search), t = m ? m[1] : null; if (!t) try { t = localStorage.getItem('hr_tab'); } catch (e) { }
-  if (t && t !== 'keys' && TABS.indexOf(t) >= 0) tab(t);
+  if (t && t !== 'keys' && t !== 'fam' && TABS.indexOf(t) >= 0) tab(t);
   renderInstall(); renderNoteCfg();
   setTimeout(function () { var m2 = el('splmsg'); if (m2 && !last) m2.textContent = 'Still trying to reach your PC...'; }, 4000);
   setTimeout(function () { var sp = el('splash'); if (sp && !last) { sp.className = 'gone'; setTimeout(function () { sp.style.display = 'none'; }, 400); } }, 8000);

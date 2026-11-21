@@ -644,6 +644,7 @@ namespace HallowRemote
                 { "clipboard", S.AllowClipboard && !Paused }, { "peek", S.AllowPeek && !Paused },   // v1.9
                 { "keys", KeysState() },   // v1.10
                 { "guard", GuardState() }, { "assist", AssistState() },   // v1.13: Hallow Guard and Hallow Assist
+                { "shield", ShieldState() },   // v1.15: Hallow Shield's blocked counts
                 { "files", FilesState() },   // v1.11: upload switch and the "Send to phone" list (names, sizes, random ids - never paths)
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
@@ -724,6 +725,7 @@ namespace HallowRemote
                 case "set": if (ch != null && Channels.Contains(ch) && int.TryParse(q.ContainsKey("v") ? q["v"] : "", out v)) msg = mix("/set?ch=" + ch + "&v=" + Math.Max(0, Math.Min(100, v))); break;
                 case "mute": if (ch != null && Channels.Contains(ch)) msg = mix("/mute?ch=" + ch + "&m=toggle"); break;
                 case "mic": msg = mix("/mic?mute=toggle"); break;
+                case "app": { var r = MixerApp(q); Changed(); return js.Serialize(r); }   // v1.15: one app's volume / mute / channel (Mixer 3.24+)
                 case "media": { string d; q.TryGetValue("do", out d); if (d == "playpause" || d == "next" || d == "prev") msg = mix("/media?do=" + d); break; }
                 case "preset": { string n; if (q.TryGetValue("name", out n) && n.Length < 60) msg = mix("/preset?name=" + Uri.EscapeDataString(n)); break; }
                 case "play":
@@ -764,7 +766,9 @@ namespace HallowRemote
                 }
                 case "guard": case "assist":   // v1.13: Hallow Guard / Assist - a refusal or "isn't running" comes back as ok:false
                 {
-                    string d; q.TryGetValue("do", out d); string err; msg = a == "guard" ? GuardDo(d, out err) : AssistDo(d, out err);
+                    string d; q.TryGetValue("do", out d); string err;
+                    if (a == "assist" && d == "connect") { string pcName; q.TryGetValue("name", out pcName); msg = AssistConnect(pcName, out err); }   // v1.15: Open on PC
+                    else msg = a == "guard" ? GuardDo(d, out err) : AssistDo(d, out err);
                     if (err != null) return js.Serialize(new Dictionary<string, object> { { "ok", false }, { "msg", err } });
                     break;
                 }

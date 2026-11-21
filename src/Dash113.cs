@@ -28,7 +28,8 @@ namespace HallowRemote
                 { "scanning", Get(s, "scanning") is bool && (bool)Get(s, "scanning") }, { "scanKind", Get(s, "scanKind") as string },
                 { "lastScan", When(Get(s, "lastScan")) }, { "lastResult", Get(s, "lastGuardScanResult") as string }, { "lastKind", Get(s, "lastGuardScanKind") as string },
                 { "lastGuardScan", Get(s, "lastGuardScan") as string },
-                { "threats", threats == null ? null : (object)(int)Num(threats) }, { "watch", Get(s, "watchDownloads") is bool && (bool)Get(s, "watchDownloads") } };
+                { "threats", threats == null ? null : (object)(int)Num(threats) }, { "watch", Get(s, "watchDownloads") is bool && (bool)Get(s, "watchDownloads") },
+                { "familyScore", Get(s, "familyScore") == null ? null : (object)(int)Math.Round(Num(Get(s, "familyScore"))) }, { "report", GuardReport(s) }, { "hardening", GuardHardening(s) } };   // v1.15
         }
         // the message to show (null = not one of the fixed commands); err = Guard's refusal, or that it isn't running
         static string GuardDo(string d, out string err)
@@ -36,6 +37,8 @@ namespace HallowRemote
             err = null;
             if (d == "scan") { err = Family.Error(Family.Send("Guard", "scan quick", 5000), "Hallow Guard isn't running"); return "Quick scan started (Microsoft Defender)"; }
             if (d == "open") { err = Family.Error(Family.Send("Guard", "open history", 5000), "Hallow Guard isn't running"); return "Hallow Guard is open on your PC"; }
+            if (d == "report") { err = Family.Error(Family.Send("Guard", "open reports", 5000), "Hallow Guard isn't running"); return "The weekly report is open in Hallow Guard on your PC"; }   // v1.15
+            if (d == "hardening") { err = Family.Error(Family.Send("Guard", "open hardening", 5000), "Hallow Guard isn't running"); return "Hardening is open in Hallow Guard on your PC"; }
             return null;
         }
 
@@ -45,7 +48,7 @@ namespace HallowRemote
             var s = Family.StatusFile("Assist"); if (s == null) return null;
             var session = Get(s, "session") as string ?? "none";
             if (session != "none" && session != "waiting" && session != "asking" && session != "connected") session = "none";
-            return new Dictionary<string, object> { { "session", session }, { "helping", Get(s, "helping") is bool && (bool)Get(s, "helping") }, { "unattended", Get(s, "unattended") is bool && (bool)Get(s, "unattended") } };
+            return new Dictionary<string, object> { { "session", session }, { "helping", Get(s, "helping") is bool && (bool)Get(s, "helping") }, { "unattended", Get(s, "unattended") is bool && (bool)Get(s, "unattended") }, { "pcs", AssistPcs(s) } };   // v1.15: your own PCs (Assist 1.10+)
         }
         static string AssistDo(string d, out string err)
         {

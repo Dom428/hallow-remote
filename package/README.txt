@@ -7,6 +7,12 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.15
+- Mixer per-app volumes: under each channel on the Remote tab, a slider, Mute and Move for every app in Hallow Mixer (3.24 or newer).
+- Hallow Guard's weekly report and Windows hardening on Home, and a new Family tab with the whole report.
+- Hallow Shield: ads and trackers blocked today and this week (Shield 1.6 or newer).
+- Hallow Assist: your own PCs with an online dot, and Open on PC (Assist 1.10 or newer) - it only opens Assist with that PC picked.
+
 WHAT'S NEW IN 1.14
 - New app icon: the phone with signal waves (also on the phone's home screen after you add it again).
 
