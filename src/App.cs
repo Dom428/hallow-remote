@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.15.0.0")]
-[assembly: AssemblyFileVersion("1.15.0.0")]
+[assembly: AssemblyVersion("1.16.0.0")]
+[assembly: AssemblyFileVersion("1.16.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.15";
+        public const string Version = "1.16";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -54,20 +54,37 @@ namespace HallowRemote
         }
         // v1.5: the accent in use ("#RRGGBB") - the Hallow accent from Hallow Toolkit, or Remote's own orange
         public static string AccentHex = Accent.Default;
+        // v1.16: the accent as text / thin lines - darkened in light mode so it reads on the light background
+        public static string AccentText { get { return Look.IsLight ? Look.TextAccent(AccentHex) : AccentHex; } }
+        // v1.16: light mode - each dark colour of Theme.xaml (and the few in code) and its light one; the keys stay the same
+        public static readonly Dictionary<string, string> LightMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            { "#16121C", Look.LBg }, { "#211B2A", Look.LPanel }, { "#2E2639", Look.LPanel2 }, { "#3A3248", Look.LBorder }, { "#ECE8F4", Look.LText }, { "#8F88A0", Look.LMuted },
+            { "#C8414B", Look.LRed }, { "#E05A64", "#A82A35" }, { "#2A2333", Look.LPanel2 }, { "#55496A", "#B9AED0" }, { "#FEFEFE", "#1E1A26" }, { "#58566A", "#C9C2D6" },
+            { "#CDCAD6", "#FFFFFF" }, { "#6ED28C", Look.LGreen }, { "#241E2E", Look.LPanel }, { "#1A1522", Look.LPanel }, { "#A98BE0", Look.LLilac }, { "#F0BE5A", Look.LAmber } };
         public static void LoadTheme(Application app)
         {
             string xaml;
             using (var s = Assembly.GetExecutingAssembly().GetManifestResourceStream("HallowRemote.Theme.xaml")) using (var r = new System.IO.StreamReader(s)) xaml = r.ReadToEnd();
-            AccentHex = Accent.Current(RemoteSettings.Load().UseHallowAccent);
+            var set = RemoteSettings.Load();
+            AccentHex = Accent.Current(set.UseHallowAccent);
+            Look.IsLight = Look.Resolve(set.Look, Accent.FilePath);
+            xaml = Accent.ApplyTo(xaml.Replace("#F07821", AccentText), AccentHex);
+            if (Look.IsLight) xaml = Look.Swap(xaml, LightMap);
             app.Resources.MergedDictionaries.Clear();
-            app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(Accent.ApplyTo(xaml, AccentHex)));
+            app.Resources.MergedDictionaries.Add((ResourceDictionary)XamlReader.Parse(xaml));
         }
     }
 
     public class MainWindow : Window
     {
-        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int attr, ref int val, int size);
-        static SolidColorBrush B(string hex) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); }
+        // v1.16: hard-coded colours follow light mode too (Program.LightMap)
+        // status green / amber as small text are darkened like the accent in light (the family green / amber are under 4.5:1 on white)
+        static SolidColorBrush B(string hex)
+        {
+            var h = Look.Pick(hex, Program.LightMap);
+            if (Look.IsLight && (hex == "#6ED28C" || hex == "#F0BE5A")) h = Look.TextAccent(h);
+            return new SolidColorBrush((Color)ColorConverter.ConvertFromString(h));
+        }
 
         readonly RemoteSettings S = RemoteSettings.Load();
         readonly Server server;
@@ -82,7 +99,7 @@ namespace HallowRemote
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             try { Icon = AppIcon(); } catch { }
             Content = Build();
-            SourceInitialized += (s, e) => { int dark = 1; DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, 20, ref dark, 4); };
+            Look.Track(this);   // v1.16: the title bar matches light / dark
             Closing += (s, e) =>
             {
                 if (!exiting && S.TrayOnClose && !Snap.On)
@@ -129,6 +146,7 @@ namespace HallowRemote
                 var host = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; host.Tick += (s, e) => CheckHost(); host.Start(); CheckHost();
                 // v1.5: the Hallow accent, live (the folder may only appear later, when Hallow Toolkit first saves a colour)
                 accentWatch = Accent.Watch(() => Dispatcher.BeginInvoke(new Action(ApplyAccent)));
+                Look.WatchSystem(Dispatcher, ApplyAccent);   // v1.16: "Same as Windows" follows the Windows light / dark setting live
                 // v1.7: look for a newer version 20 s after start and then every 6 hours (at most once a day); never in a test folder unless a stand-in is set
                 if (RemoteSettings.TestDir == null || Environment.GetEnvironmentVariable("HALLOW_REMOTE_API") != null)
                 {
@@ -156,7 +174,7 @@ namespace HallowRemote
             var sp = new StackPanel { Margin = new Thickness(26, 16, 26, 20) };
             var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 14) };
             try { title.Children.Add(new Image { Source = AppIcon(), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) }); } catch { }
-            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentHex), VerticalAlignment = VerticalAlignment.Center });
+            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentText), VerticalAlignment = VerticalAlignment.Center });
             title.Children.Add(new TextBlock { Text = " REMOTE", FontSize = 22, FontWeight = FontWeights.Light, VerticalAlignment = VerticalAlignment.Center });
             // v1.7: "Update to vX" appears here when GitHub has a newer Hallow Remote
             updateBtn = new Button { Style = (Style)FindResource("Accent"), Visibility = pending != null ? Visibility.Visible : Visibility.Collapsed, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -172,7 +190,7 @@ namespace HallowRemote
             info.Children.Add(new TextBlock { Text = "Scan this with your phone's camera", FontSize = 16, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
             info.Children.Add(new TextBlock { Text = "Then use your browser's \"Add to Home screen\" so it opens like an app. You get Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, your PC's stats, files both ways and sleep / shut down / lock.",
                 Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
-            link = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = B("#ECE8F4"), Margin = new Thickness(0, 0, 0, 10) };
+            link = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Text"), Margin = new Thickness(0, 0, 0, 10) };
             info.Children.Add(link);
             var btns = new WrapPanel();
             var copy = new Button { Content = "Copy link", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 8) };
@@ -213,6 +231,17 @@ namespace HallowRemote
             sw("Start with Windows (in the tray)", StartsWithWindows(), v => SetStartWithWindows(v));
             sw("Use the Hallow icon (when Hallow Hub runs, Hallow Remote lives in its tray menu instead of having its own icon)", S.UseHallowIcon, v => { S.UseHallowIcon = v; CheckHost(); });
             sw("Use the Hallow accent (the colour picked in Hallow Toolkit, here and on your phone)", S.UseHallowAccent, v => { S.UseHallowAccent = v; S.Save(); Dispatcher.BeginInvoke(new Action(ApplyAccent)); });
+            // v1.16: light / dark - follows the Hallow setting (Hallow Toolkit) unless picked here
+            var lookRow = new DockPanel { Margin = new Thickness(50, 0, 0, 8) };
+            var lookLbl = new TextBlock { Text = "Look", Width = 50, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource("Muted") }; DockPanel.SetDock(lookLbl, Dock.Left); lookRow.Children.Add(lookLbl);
+            var lookChips = new StackPanel { Orientation = Orientation.Horizontal };
+            foreach (var o in new[] { Tuple.Create(Look.Follow, "Follow Hallow"), Tuple.Create(Look.Light, "Light"), Tuple.Create(Look.Dark, "Dark") })
+            {
+                var key = o.Item1; var c = new ToggleButton { Content = o.Item2, Style = (Style)FindResource("Chip"), Margin = new Thickness(0, 0, 6, 0), IsChecked = Look.Normalize(S.Look) == key, Padding = new Thickness(12, 4, 12, 4) };
+                c.Click += (s, e) => { S.Look = key; S.Save(); foreach (ToggleButton x in lookChips.Children) x.IsChecked = x == c; Dispatcher.BeginInvoke(new Action(ApplyAccent)); };
+                lookChips.Children.Add(c);
+            }
+            lookRow.Children.Add(lookChips); more.Children.Add(lookRow);
             // v1.7: trackpad and keyboard from the phone - off by default, with a clear warning
             sw("Let your phone use the mouse and keyboard (trackpad and typing on the Mouse page)", S.AllowInput, v => { S.AllowInput = v; S.Save(); server.Changed(); inputWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
             inputWarn = new TextBlock { Text = "Anyone with your link can now move the mouse and type on this PC - like sitting at it. Turn it off when you don't need it; Pause the remote also stops it.",
@@ -266,7 +295,7 @@ namespace HallowRemote
             hn.Children.Add(new TextBlock { Text = "Turn on HTTPS (optional)", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
             httpsText = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 0, 0, 8) };
             hn.Children.Add(httpsText);
-            httpsCmd = new TextBox { IsReadOnly = true, FontFamily = new FontFamily("Consolas"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Background = B("#1A1522"), Foreground = B("#ECE8F4"), BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 0, 8) };
+            httpsCmd = new TextBox { IsReadOnly = true, FontFamily = new FontFamily("Consolas"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Background = Look.IsLight ? B(Look.LPanel2) : B("#1A1522"), Foreground = B("#ECE8F4"), BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 0, 8) };
             hn.Children.Add(httpsCmd);
             var copyCmd = new Button { Content = "Copy command", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left };
             copyCmd.Click += (s, e) => { try { Clipboard.SetText(httpsCmd.Text); state.Text = "Command copied - paste it into PowerShell after turning on HTTPS in Tailscale."; } catch { } };
@@ -444,9 +473,11 @@ namespace HallowRemote
         System.IO.FileSystemWatcher accentWatch;
         void ApplyAccent()
         {
-            var a = Accent.Current(S.UseHallowAccent); if (a == Program.AccentHex) return;
+            var a = Accent.Current(S.UseHallowAccent); var light = Look.Resolve(S.Look, Accent.FilePath);
+            if (a == Program.AccentHex && light == Look.IsLight) return;   // v1.16: a light / dark change re-themes too
             Program.LoadTheme(Application.Current);
-            Content = Build(); ShowLink(); server.Changed();
+            foreach (Window w in Application.Current.Windows) { w.Background = (Brush)FindResource("Bg"); w.Foreground = (Brush)FindResource("Text"); }
+            Content = Build(); ShowLink(); server.Changed(); Look.TitleBars();
         }
         // ---- v1.5: "Hallow Remote closed unexpectedly last time" - once per crash report
         bool crashShown;
@@ -463,7 +494,7 @@ namespace HallowRemote
             var w = new Window { Title = "Hallow Remote", Width = 440, SizeToContent = SizeToContent.Height, ResizeMode = ResizeMode.NoResize, WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 Background = (Brush)FindResource("Bg"), Foreground = (Brush)FindResource("Text"), FontFamily = new FontFamily("Segoe UI"), FontSize = 12.5, Topmost = true };
             try { w.Icon = AppIcon(); } catch { }
-            w.SourceInitialized += (s, e) => { int dark = 1; DwmSetWindowAttribute(new WindowInteropHelper(w).Handle, 20, ref dark, 4); };
+            Look.Track(w);
             var sp = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
             sp.Children.Add(new TextBlock { Text = "Hallow Remote closed unexpectedly last time", FontSize = 15, FontWeight = FontWeights.Bold, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 6) });
             DateTime when = DateTime.Now; try { when = System.IO.File.GetLastWriteTime(file); } catch { }

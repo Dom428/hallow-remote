@@ -6,48 +6,50 @@
 <link rel="manifest" href="manifest.json"><link rel="icon" href="app-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Hallow</title>
 <style>
-:root{--accent:#f07820;--on-accent:#1a0e04}
+:root{--accent:#f07820;--on-accent:#1a0e04;--accent-text:#f07820;--game:#f07820;--shadow:#000a;--pill-bg:#6ed28c;--pill-fg:#0e2416;--good-text:#6ed28c;--warn-text:#f0be5a;--bg:#16121c;--panel:#211b2a;--btn:#2a2333;--line2:#2e2639;--line:#3a3248;--pop:#241e2e;--note:#2a2238;--note-line:#4a3d60;--text:#ece8f4;--muted:#8f88a0;--soft:#c0b8d0;--lilac:#a98be0;--green:#6ed28c;--amber:#f0be5a;--red:#ff6b6b;--redfill:#e0424c;--alertbg:#2e1a22;--dotoff:#5a5366;--blue:#5ab4f0;--on-green:#0e2416;color-scheme:dark}
+/* v1.16: light mode (the phone's setting, or the choice on Home) - the Hallow light palette */
+:root.light{--game:#b5540c;--shadow:#1e1a2633;--pill-bg:#d7f0e0;--pill-fg:#145c33;--good-text:#1b7f47;--warn-text:#9c6300;--bg:#f6f4fa;--panel:#ffffff;--btn:#eeeaf5;--line2:#dad3e6;--line:#dad3e6;--pop:#ffffff;--note:#ffffff;--note-line:#dad3e6;--text:#1e1a26;--muted:#6b6478;--soft:#4f4860;--lilac:#7a5cc0;--green:#1e8e4f;--amber:#a66a00;--red:#c2333f;--redfill:#c2333f;--alertbg:#fbeaec;--dotoff:#b8b0c6;--blue:#1f6fb0;--on-green:#ffffff;color-scheme:light}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:#16121c;color:#ece8f4;font:15px/1.35 "Segoe UI",system-ui,-apple-system,sans-serif;padding:16px 14px calc(30px + env(safe-area-inset-bottom))}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 "Segoe UI",system-ui,-apple-system,sans-serif;padding:16px 14px calc(30px + env(safe-area-inset-bottom))}
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-h1{margin:0;font-size:22px;color:var(--accent);letter-spacing:.5px}h1 span{color:#ece8f4;font-weight:300}
-.sub{color:#8f88a0;font-size:13px}
-h2{font-size:12px;color:#a98be0;letter-spacing:.8px;text-transform:uppercase;margin:22px 2px 10px}
-.card{background:#211b2a;border:1px solid #2e2639;border-radius:16px;padding:14px}
+h1{margin:0;font-size:22px;color:var(--accent-text);letter-spacing:.5px}h1 span{color:var(--text);font-weight:300}
+.sub{color:var(--muted);font-size:13px}
+h2{font-size:12px;color:var(--lilac);letter-spacing:.8px;text-transform:uppercase;margin:22px 2px 10px}
+.card{background:var(--panel);border:1px solid var(--line2);border-radius:16px;padding:14px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.stat{background:#211b2a;border-radius:14px;padding:10px 8px;text-align:center}.stat b{display:block;font-size:19px}.stat small{color:#8f88a0;font-size:12px}
-.warn{color:#f0be5a}.bad{color:#ff6b6b}
-.mic{display:block;width:100%;margin-top:12px;border:0;border-radius:16px;padding:16px;font-size:18px;font-weight:700;background:#2a2333;color:#ece8f4}
-.mic.on{background:#e0424c;color:#fff}
+.stat{background:var(--panel);border-radius:14px;padding:10px 8px;text-align:center}.stat b{display:block;font-size:19px}.stat small{color:var(--muted);font-size:12px}
+.warn{color:var(--warn-text)}.bad{color:var(--red)}
+.mic{display:block;width:100%;margin-top:12px;border:0;border-radius:16px;padding:16px;font-size:18px;font-weight:700;background:var(--btn);color:var(--text)}
+.mic.on{background:var(--redfill);color:#fff}
 .row{display:flex;align-items:center;gap:10px;margin:10px 0}
-.row .n{width:86px;font-weight:600}.row .p{width:44px;text-align:right;color:#8f88a0;font-size:13px}
-input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}
-.btn{border:0;border-radius:12px;padding:9px 13px;background:#2a2333;color:#ece8f4;font-weight:600;font-size:14px}
-.btn.m{min-width:64px}.btn.on{background:#e0424c;color:#fff}.btn.go{background:var(--accent);color:var(--on-accent)}
+.row .n{width:86px;font-weight:600}.row .p{width:44px;text-align:right;color:var(--muted);font-size:13px}
+input[type=range]{flex:1;accent-color:var(--c,var(--accent));height:28px}:root.light input[type=range]{accent-color:var(--c,var(--accent-text))}
+.btn{border:0;border-radius:12px;padding:9px 13px;background:var(--btn);color:var(--text);font-weight:600;font-size:14px}
+.btn.m{min-width:64px}.btn.on{background:var(--redfill);color:#fff}.btn.go{background:var(--accent);color:var(--on-accent)}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.np .t{font-weight:700;font-size:16px}.np .a{color:#8f88a0;font-size:13px;margin:2px 0 10px}.np .b{display:flex;gap:8px}
+.np .t{font-weight:700;font-size:16px}.np .a{color:var(--muted);font-size:13px;margin:2px 0 10px}.np .b{display:flex;gap:8px}
 .games{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-.g{position:relative;border-radius:14px;overflow:hidden;background:#2a2333;aspect-ratio:460/215;border:0;padding:0;color:#fff;text-align:left}
+.g{position:relative;border-radius:14px;overflow:hidden;background:var(--btn);aspect-ratio:460/215;border:0;padding:0;color:#fff;text-align:left}
 .g img{width:100%;height:100%;object-fit:cover;display:block}.g span{position:absolute;left:8px;bottom:6px;right:8px;font-size:13px;font-weight:600;text-shadow:0 1px 4px #000}
-.g .pl{position:absolute;top:6px;left:6px;background:#6ed28c;color:#0e2416;font-size:11px;font-weight:700;border-radius:8px;padding:2px 7px}
+.g .pl{position:absolute;top:6px;left:6px;background:var(--pill-bg);color:var(--pill-fg);font-size:11px;font-weight:700;border-radius:8px;padding:2px 7px}
 .g .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:8px;text-align:center;font-weight:700}
-.off{color:#8f88a0;font-size:14px}
-#toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#241e2e;border:1px solid #3a3248;border-radius:12px;padding:10px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+.off{color:var(--muted);font-size:14px}
+#toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--pop);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
 #toast.show{opacity:1}
 .session{display:flex;align-items:center;justify-content:space-between}
-.clip{display:flex;gap:10px;align-items:center;width:100%;background:none;border:0;border-top:1px solid #2e2639;color:#ece8f4;padding:9px 0;text-align:left;font:inherit}
-.clip:first-of-type{border-top:0}.clip img,.clip .ni{width:96px;height:54px;border-radius:8px;object-fit:cover;background:#2a2333;flex:none}
-.clip b{display:block;font-size:14px}.clip small{color:#8f88a0;font-size:12px}
-.vg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid #2e2639;font-size:14px}.vg:first-of-type{border-top:0}.vg span{color:#8f88a0;font-size:13px;text-align:right}
+.clip{display:flex;gap:10px;align-items:center;width:100%;background:none;border:0;border-top:1px solid var(--line2);color:var(--text);padding:9px 0;text-align:left;font:inherit}
+.clip:first-of-type{border-top:0}.clip img,.clip .ni{width:96px;height:54px;border-radius:8px;object-fit:cover;background:var(--btn);flex:none}
+.clip b{display:block;font-size:14px}.clip small{color:var(--muted);font-size:12px}
+.vg{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line2);font-size:14px}.vg:first-of-type{border-top:0}.vg span{color:var(--muted);font-size:13px;text-align:right}
 .power{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.power .btn{padding:14px 6px}
 .btn:disabled{opacity:.55}
-.tabs{display:flex;gap:6px;margin:0 -14px 14px;padding:0 14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:1 0 auto;min-width:64px;border:0;border-radius:12px;padding:11px 12px;background:#211b2a;color:#8f88a0;font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
+.tabs{display:flex;gap:6px;margin:0 -14px 14px;padding:0 14px;overflow-x:auto;scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tabs button{flex:1 0 auto;min-width:64px;border:0;border-radius:12px;padding:11px 12px;background:var(--panel);color:var(--muted);font-weight:700;font-size:14px}.tabs button.on{background:var(--accent);color:var(--on-accent)}
 .big{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.big .stat{padding:18px 8px}.big .stat b{font-size:34px;font-weight:700}.big .stat small{font-size:13px}
-.src{color:#8f88a0;font-size:12px;margin:10px 2px 0}
+.src{color:var(--muted);font-size:12px;margin:10px 2px 0}
 .mine{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.mine .btn{padding:20px 8px;font-size:15px;min-height:72px}
-.ed{display:flex;gap:6px;align-items:center;margin:8px 0}.ed input{flex:1;min-width:0;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit}.ed small{color:#8f88a0;font-size:11px;display:block}
-select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit;flex:1;min-width:0}
-#pad{height:46vh;min-height:240px;background:#211b2a;border:1px solid #2e2639;border-radius:16px;display:flex;align-items:center;justify-content:center;text-align:center;color:#8f88a0;font-size:13px;touch-action:none;user-select:none;-webkit-user-select:none}
+.ed{display:flex;gap:6px;align-items:center;margin:8px 0}.ed input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:9px;font:inherit}.ed small{color:var(--muted);font-size:11px;display:block}
+select{background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:9px;font:inherit;flex:1;min-width:0}
+#pad{height:46vh;min-height:240px;background:var(--panel);border:1px solid var(--line2);border-radius:16px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:13px;touch-action:none;user-select:none;-webkit-user-select:none}
 .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}.row3 .btn{padding:16px 4px}
 .keys{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:6px}.keys .btn{padding:12px 4px;font-size:13px}
 #player{position:fixed;inset:0;background:#000;display:none;flex-direction:column;z-index:5}
@@ -55,28 +57,61 @@ select{background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece
 /* v1.13: home dashboard, notices, install card, splash; a sideways swipe switches tabs, never goes back a page */
 html,body{overscroll-behavior-x:none}
 .dash{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.dc{background:#211b2a;border:1px solid #2e2639;border-radius:18px;padding:14px;min-width:0}.dc.full{grid-column:1/-1}
-.dc h3{margin:0 0 6px;font-size:12px;color:#a98be0;letter-spacing:.8px;text-transform:uppercase}
-.dv{font-size:26px;font-weight:700;line-height:1.15;overflow-wrap:anywhere}.dv.good{color:#6ed28c}
+.dc{background:var(--panel);border:1px solid var(--line2);border-radius:18px;padding:14px;min-width:0}.dc.full{grid-column:1/-1}
+.dc h3{margin:0 0 6px;font-size:12px;color:var(--lilac);letter-spacing:.8px;text-transform:uppercase}
+.dv{font-size:26px;font-weight:700;line-height:1.15;overflow-wrap:anywhere}.dv.good{color:var(--good-text)}
 .dc .btn{min-height:52px;font-size:15px}.dbtns{display:flex;gap:8px;margin-top:12px}.dbtns .btn{flex:1;min-width:0}
-.dc.alert{border-color:#e0424c;background:#2e1a22}
-button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{background:#e0424c;border-color:#e0424c;color:#fff}.dc.micon h3{color:#fff}
-.dclip{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#2a2333;border:0;padding:0;margin:4px 0 8px}
+.dc.alert{border-color:var(--redfill);background:var(--alertbg)}
+button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{background:var(--redfill);border-color:var(--redfill);color:#fff}.dc.micon h3{color:#fff}
+.dclip{position:relative;display:block;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--btn);border:0;padding:0;margin:4px 0 8px}
 .dclip img{width:100%;height:100%;object-fit:cover;display:block}.dclip .pb{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;color:#fff;text-shadow:0 2px 10px #000}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:#5a5366;vertical-align:middle}.dot.waiting{background:#6ed28c}.dot.busy{background:#f0be5a}.dot.unknown{background:transparent;border:1.5px solid #8f88a0;width:7px;height:7px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--dotoff);vertical-align:middle}.dot.waiting{background:var(--green)}.dot.busy{background:var(--amber)}.dot.unknown{background:transparent;border:1.5px solid var(--muted);width:7px;height:7px}
 .pcr{display:flex;align-items:center;gap:8px;margin:8px 0}.pcr b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}.pcr .btn{min-height:44px;font-size:14px;flex:0 0 auto}
-.apr{display:flex;align-items:center;gap:8px;margin:2px 0 8px 14px;font-size:13px}.apr .an{width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#c0b8d0}.apr input[type=range]{height:24px}.apr .btn{min-height:36px;padding:6px 10px;font-size:13px}
-.apr select{background:#2a2333;color:#ece8f4;border:1px solid #3a3248;border-radius:10px;padding:7px 4px;font-size:13px;max-width:84px}
-.warn{color:#f0be5a}.good{color:#6ed28c}.kv{display:flex;justify-content:space-between;margin:6px 0}.kv span{color:#8f88a0}
-.pill{display:inline-block;background:#6ed28c;color:#0e2416;font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-bottom:6px}
+.apr{display:flex;align-items:center;gap:8px;margin:2px 0 8px 14px;font-size:13px}.apr .an{width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--soft)}.apr input[type=range]{height:24px}.apr .btn{min-height:36px;padding:6px 10px;font-size:13px}
+.apr select{background:var(--btn);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:7px 4px;font-size:13px;max-width:84px}
+.warn{color:var(--warn-text)}.good{color:var(--good-text)}.kv{display:flex;justify-content:space-between;margin:6px 0}.kv span{color:var(--muted)}
+.pill{display:inline-block;background:var(--pill-bg);color:var(--pill-fg);font-size:11px;font-weight:700;border-radius:8px;padding:2px 8px;margin-bottom:6px}
 #notes{position:fixed;top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;z-index:7;display:flex;flex-direction:column;gap:8px;pointer-events:none}
-.note{pointer-events:auto;background:#2a2238;border:1px solid #4a3d60;border-left:5px solid var(--accent);border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px #000a;animation:nin .25s ease-out}
-.note.bad{border-left-color:#ff6b6b}.note b{display:block;font-size:15px}.note small{color:#c0b8d0;font-size:13px}
+.note{pointer-events:auto;background:var(--note);border:1px solid var(--note-line);border-left:5px solid var(--accent);border-radius:14px;padding:11px 14px;box-shadow:0 8px 28px var(--shadow);animation:nin .25s ease-out}
+.note.bad{border-left-color:var(--red)}.note b{display:block;font-size:15px}.note small{color:var(--soft);font-size:13px}
 @keyframes nin{from{transform:translateY(-16px);opacity:0}to{transform:none;opacity:1}}
-#splash{position:fixed;inset:0;z-index:9;background:#16121c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .35s}
-#splash img{width:112px;height:112px}#splash b{color:var(--accent);letter-spacing:2px;font-size:18px}#splash.gone{opacity:0;pointer-events:none}
-#player .bar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:#ece8f4}
-</style></head>
+#splash{position:fixed;inset:0;z-index:9;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .35s}
+#splash img{width:112px;height:112px}#splash b{color:var(--accent-text);letter-spacing:2px;font-size:18px}#splash.gone{opacity:0;pointer-events:none}
+#player .bar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:var(--text)}
+</style>
+<script>
+// v1.16: light / dark. Auto follows the phone (prefers-color-scheme); Light or Dark is picked on Home and kept on this phone only.
+var lookPref = 'auto'; try { lookPref = localStorage.getItem('hallowLook') || 'auto'; } catch (e) { }
+var lookMq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+function isLight() { return lookPref == 'light' || (lookPref == 'auto' && !!lookMq && lookMq.matches); }
+function lumOf(h) { var v = [1, 3, 5].map(function (i) { var c = parseInt(h.substr(i, 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; }
+function contrastOf(a, b) { var x = lumOf(a), y = lumOf(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+// the accent for text on the light background: darkened (HSL lightness) until it reads at 4.5:1 on white and on the background
+function textAccent(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return '#b5540c';
+  var r = parseInt(hex.substr(1, 2), 16) / 255, g = parseInt(hex.substr(3, 2), 16) / 255, b = parseInt(hex.substr(5, 2), 16) / 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, h = 0, s = 0, d = mx - mn;
+  if (d) { s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn); h = mx == r ? (g - b) / d + (g < b ? 6 : 0) : mx == g ? (b - r) / d + 2 : (r - g) / d + 4; h /= 6; }
+  function f(p, q, t) { if (t < 0) t += 1; if (t > 1) t -= 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; }
+  function hx(v) { return ('0' + Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16)).slice(-2); }
+  var cur = hex.toLowerCase();
+  while ((contrastOf(cur, '#ffffff') < 4.5 || contrastOf(cur, '#f6f4fa') < 4.5) && l > 0) {
+    l = Math.max(0, l - 0.005);
+    if (!s) cur = '#' + hx(l) + hx(l) + hx(l); else { var q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q; cur = '#' + hx(f(p, q, h + 1 / 3)) + hx(f(p, q, h)) + hx(f(p, q, h - 1 / 3)); }
+  }
+  return cur;
+}
+function applyLook() {
+  var light = isLight(), r = document.documentElement;
+  r.classList.toggle('light', light);
+  var a = (r.style.getPropertyValue('--accent') || '#f07820').trim();
+  r.style.setProperty('--accent-text', light ? textAccent(a) : a);
+  var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', light ? '#f6f4fa' : '#16121c');
+}
+function setLook(p) { lookPref = p; try { if (p == 'auto') localStorage.removeItem('hallowLook'); else localStorage.setItem('hallowLook', p); } catch (e) { } applyLook(); if (window.renderLookCfg) renderLookCfg(); }
+if (lookMq) { if (lookMq.addEventListener) lookMq.addEventListener('change', applyLook); else if (lookMq.addListener) lookMq.addListener(applyLook); }
+applyLook();
+</script></head>
 <body>
 <div id="splash"><img src="app-192.png" alt=""><b>HALLOW REMOTE</b><small class="sub" id="splmsg">Connecting to your PC...</small></div>
 <div id="notes"></div>
@@ -92,14 +127,14 @@ button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{backgr
 <div id="v_live" style="display:none"><div class="big" id="bigstats"></div><div class="src" id="livesrc"></div><div id="lastmatch"></div></div>
 <div id="v_mine" style="display:none"><div class="mine" id="minegrid"></div><div id="mineedit"></div><button class="btn" style="width:100%;margin-top:14px" id="editbtn" onclick="toggleEdit()">Edit my buttons</button></div>
 <div id="v_fam" style="display:none"></div>
-<div id="v_dash"><div id="install"></div><div class="dash" id="dash"></div><div id="notecfg"></div></div>
+<div id="v_dash"><div id="install"></div><div class="dash" id="dash"></div><div id="notecfg"></div><div id="lookcfg"></div></div>
 <div id="v_home" style="display:none">
 <div class="stats" id="stats"></div>
 <button class="mic" id="mic" style="display:none" onclick="act('a=mic')">Mic</button>
 <div id="np"></div>
 <div id="sysmedia"></div>
 <div id="apps"></div>
-<div id="clipcard" style="display:none"><h2>Send to your PC</h2><div class="card"><textarea id="cliptext" rows="3" maxlength="2000" placeholder="Text, a link, a code... it goes on the PC clipboard" style="width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit;resize:vertical"></textarea><button class="btn go" style="width:100%;margin-top:8px" onclick="sendClip()">Copy to the PC clipboard</button></div></div>
+<div id="clipcard" style="display:none"><h2>Send to your PC</h2><div class="card"><textarea id="cliptext" rows="3" maxlength="2000" placeholder="Text, a link, a code... it goes on the PC clipboard" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:9px;font:inherit;resize:vertical"></textarea><button class="btn go" style="width:100%;margin-top:8px" onclick="sendClip()">Copy to the PC clipboard</button></div></div>
 <div id="peekcard" style="display:none"><h2>Screen peek</h2><div class="card"><button class="btn go" style="width:100%" id="peekbtn" onclick="peek()">Peek at the screen</button><a id="peeklink" target="_blank"><img id="peekimg" alt="" style="display:none;width:100%;border-radius:10px;margin-top:10px"></a><div class="sub" style="margin-top:6px">One picture each time you tap. Your PC shows that you looked.</div></div></div>
 <div id="mixer"></div>
 <div id="games"></div>
@@ -113,8 +148,14 @@ button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{backgr
 <div id="toast"></div>
 <script>
 var base = location.pathname.replace(/\/?$/, '/'), dragging = {}, last = null, lastGames = '';
-var colors = { game: '#f07820', chat: '#a98be0', music: '#6ed28c', media: '#5ab4f0', other: '#8f88a0' };
+var colors = { game: 'var(--game)', chat: 'var(--lilac)', music: 'var(--green)', media: 'var(--blue)', other: 'var(--muted)' };
 function el(id) { return document.getElementById(id); }
+function renderLookCfg() {   // v1.16
+  var e = el('lookcfg'); if (!e) return;
+  e.innerHTML = '<h2>Look</h2><div class="chips">' + [['auto', 'Auto (like the phone)'], ['light', 'Light'], ['dark', 'Dark']].map(function (o) {
+    return '<button class="btn' + (lookPref == o[0] ? ' go' : '') + '" onclick="setLook(\'' + o[0] + '\')">' + o[1] + '</button>'; }).join('') + '</div>';
+}
+document.addEventListener('DOMContentLoaded', renderLookCfg);
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
 function toast(m) { var t = el('toast'); t.textContent = m; t.className = 'show'; clearTimeout(t._h); t._h = setTimeout(function () { t.className = ''; }, 2200); }
 function act(q, quiet) {
@@ -131,8 +172,8 @@ function appRows(mx, ch) {
     if (a.channel != ch && !(ch == 'other' && opts.indexOf(a.channel) < 0)) return;
     var i = mxApps.indexOf(a); if (i < 0) { mxApps.push(a); i = mxApps.length - 1; }
     h += '<div class="apr"><span class="an" title="' + esc(a.name) + '">' + (a.playing ? '&#9835; ' : '') + esc(a.name) + '</span>' +
-      '<input type="range" min="0" max="100" value="' + a.volume + '" style="--c:' + (colors[ch] || '#f07820') + '" ontouchstart="dragging.a' + i + '=1" ontouchend="dragging.a' + i + '=0" onmousedown="dragging.a' + i + '=1" onmouseup="dragging.a' + i + '=0" oninput="appVol(' + i + ',this.value)">' +
-      '<span class="p" id="pa_' + i + '" style="width:36px;text-align:right;color:#8f88a0">' + a.volume + '%</span>' +
+      '<input type="range" min="0" max="100" value="' + a.volume + '" style="--c:' + (colors[ch] || 'var(--game)') + '" ontouchstart="dragging.a' + i + '=1" ontouchend="dragging.a' + i + '=0" onmousedown="dragging.a' + i + '=1" onmouseup="dragging.a' + i + '=0" oninput="appVol(' + i + ',this.value)">' +
+      '<span class="p" id="pa_' + i + '" style="width:36px;text-align:right;color:var(--muted)">' + a.volume + '%</span>' +
       '<button class="btn' + (a.muted ? ' on' : '') + '" onclick="appDo(' + i + ',\'m=toggle\')">' + (a.muted ? 'Muted' : 'Mute') + '</button>' +
       '<select aria-label="Move to channel" onfocus="dragging.sel=1" onblur="dragging.sel=0" onchange="dragging.sel=0;appDo(' + i + ',\'ch=\'+this.value)"><option value="" selected disabled>Move</option>' +
       mx.channels.filter(function (c) { return c.id != a.channel; }).map(function (c) { return '<option value="' + c.id + '">' + esc(c.name.replace('System & other', 'System')) + '</option>'; }).join('') + '</select></div>';
@@ -150,7 +191,7 @@ function render(s) {
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
   if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s); if (view == 'files') renderFiles(s);
   var hasFam = !!(s.guard || s.shield || (s.assist && s.assist.pcs)); el('t_fam').style.display = hasFam ? '' : 'none'; if (view == 'fam') { if (hasFam) renderFam(s); else tab('dash'); }   // v1.15
-  if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); }   // v1.5: the Hallow accent
+  if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); applyLook(); }   // v1.5: the Hallow accent
   el('pc').textContent = s.pc; el('time').textContent = s.time;
   var t = s.stats, ram = t.ramTotal > 0 ? t.ramUsed / t.ramTotal : 0;
   el('stats').innerHTML = stat('CPU', t.cpu, '%', t.cpu > 90 ? 'warn' : '') + stat('GPU', t.gpu, '%') + stat('GPU temp', t.gpuTemp, '°', t.gpuTemp >= 85 ? 'bad' : t.gpuTemp >= 78 ? 'warn' : '') +
@@ -165,8 +206,8 @@ function render(s) {
     if (!Object.keys(dragging).some(function (k) { return dragging[k]; })) {
       var h = '<h2>Mixer</h2><div class="card">';
       mx.channels.forEach(function (c) {
-        h += '<div class="row"><span class="n" style="color:' + (colors[c.id] || '#ece8f4') + '">' + esc(c.name.replace('System & other', 'System')) + '</span>' +
-          '<input type="range" min="0" max="100" value="' + c.volume + '" style="--c:' + (colors[c.id] || '#f07820') + '" ontouchstart="dragging.' + c.id + '=1" ontouchend="dragging.' + c.id + '=0" onmousedown="dragging.' + c.id + '=1" onmouseup="dragging.' + c.id + '=0" oninput="slide(\'' + c.id + '\',this.value)">' +
+        h += '<div class="row"><span class="n" style="color:' + (colors[c.id] || 'var(--text)') + '">' + esc(c.name.replace('System & other', 'System')) + '</span>' +
+          '<input type="range" min="0" max="100" value="' + c.volume + '" style="--c:' + (colors[c.id] || 'var(--game)') + '" ontouchstart="dragging.' + c.id + '=1" ontouchend="dragging.' + c.id + '=0" onmousedown="dragging.' + c.id + '=1" onmouseup="dragging.' + c.id + '=0" oninput="slide(\'' + c.id + '\',this.value)">' +
           '<span class="p" id="p_' + c.id + '">' + c.volume + '%</span><button class="btn m' + (c.muted ? ' on' : '') + '" onclick="act(\'a=mute&ch=' + c.id + '\')">' + (c.muted ? 'Muted' : 'Mute') + '</button></div>';
         h += appRows(mx, c.id);   // v1.15: the apps in this channel (Mixer 3.24+)
       });
@@ -430,7 +471,7 @@ function renderKeys(s, msg) {
   if (!k.copy) { box.innerHTML = '<div class="card"><b>Phone copy is off</b><div class="sub" style="margin-top:6px">In Hallow Keys on your PC: Settings &gt; App &gt; turn on <b>Phone copy for Hallow Remote</b>.</div></div>'; return; }
   if (!hk) {
     box.innerHTML = '<div class="card"><b>Hallow Keys</b><div class="sub" style="margin:4px 0 10px">Your copy' + (k.made ? ' from ' + esc(k.made) : '') + '. Your master password stays on this phone.</div>' +
-      '<input id="hkpw" type="password" autocomplete="current-password" placeholder="Master password" style="width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:11px;font:inherit">' +
+      '<input id="hkpw" type="password" autocomplete="current-password" placeholder="Master password" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px;font:inherit">' +
       '<button class="btn go" style="width:100%;margin-top:10px" id="hkgo" onclick="hkUnlock()">Unlock</button><div class="sub" id="hkmsg" style="margin-top:8px">' + esc(msg || '') + '</div></div>';
     el('hkpw').addEventListener('keydown', function (e) { if (e.key === 'Enter') hkUnlock(); });
     return;
@@ -470,7 +511,7 @@ function hkDetail(i) {
   hkVals = {};
   var h = '<div class="card"><div class="ed" style="margin:0"><button class="btn" onclick="hkSel=-1;renderKeys(last)">&#8592; All items</button><span style="flex:1"></span>' +
     (hkCanEdit() && i.editable ? '<button class="btn" id="hkedit" onclick="hkEdit(\'' + esc(i.id) + '\')">Edit</button><button class="btn" id="hktrash" onclick="hkTrash(\'' + esc(i.id) + '\')">Trash</button>' : '') + '</div>' +
-    '<h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:#ece8f4;letter-spacing:0">' + esc(i.title) + '</h2>' +
+    '<h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:var(--text);letter-spacing:0">' + esc(i.title) + '</h2>' +
     ((i.folder || i.vault) ? '<div class="sub">' + esc([i.folder, (hk.data.vaults || []).length > 1 ? hkVaultName(i.vault) : ''].filter(Boolean).join(' · ')) + '</div>' : '');
   h += hkRow('Username', i.user) + hkRow('Password', i.pw, true) + (i.totp ? '<div style="margin:10px 0"><div class="sub">2FA code</div><div class="ed" style="margin:2px 0"><span id="hktotp" style="flex:1;font-size:20px;font-weight:700">...</span><button class="btn" onclick="hkCopyTotp()">Copy</button></div></div>' : '');
   (i.urls || []).forEach(function (u) { h += hkRow('Website', u); });
@@ -543,7 +584,7 @@ function hkOrigVal(o, k) {
   return o[k] == null ? '' : String(o[k]);
 }
 function hkInput(k, label, kind, v) {
-  var st = 'width:100%;background:#16121c;border:1px solid #3a3248;border-radius:10px;color:#ece8f4;padding:9px;font:inherit';
+  var st = 'width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:9px;font:inherit';
   var h = '<div style="margin:9px 0"><div class="sub">' + esc(label) + '</div>';
   if (kind === 'area' || kind === 'lines') return h + '<textarea id="hkf_' + k + '" rows="' + (kind === 'lines' ? 2 : 4) + '" style="' + st + '">' + esc(v) + '</textarea></div>';
   var secret = kind === 'pw' || kind === 'secret';
@@ -558,7 +599,7 @@ function hkFormOpen(f) {
   var o = f.orig, vaults = hk.data.vaults || [], folders = {};
   hkItems().forEach(function (i) { if (i.folder) folders[i.folder] = 1; }); (hk.data.folders || []).forEach(function (x) { folders[x] = 1; });
   var h = '<div class="card"><div class="ed" style="margin:0"><button class="btn" onclick="hkFormClose()">Cancel</button><span style="flex:1"></span><button class="btn go" id="hksave" onclick="hkFormSave()">Save</button></div>';
-  h += '<h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:#ece8f4;letter-spacing:0">' + (f.op === 'add' ? 'New item' : 'Edit ' + esc(o.title)) + '</h2>';
+  h += '<h2 style="margin:12px 0 4px;text-transform:none;font-size:18px;color:var(--text);letter-spacing:0">' + (f.op === 'add' ? 'New item' : 'Edit ' + esc(o.title)) + '</h2>';
   if (f.op === 'add') h += '<div class="ed"><select id="hkf_type" onchange="hkForm.type=this.value;hkForm.orig.type=this.value;hkFormOpen(hkForm)">' + [['login', 'Login'], ['note', 'Secure note'], ['card', 'Card'], ['identity', 'Identity']].map(function (t) { return '<option value="' + t[0] + '"' + (f.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select></div>';
   var fields = hkFieldsByType[f.type] || [['title', 'Title'], ['notes', 'Notes', 'area']];
   fields.forEach(function (x) { h += hkInput(x[0], x[1], x[2], hkOrigVal(o, x[0])); });
@@ -674,7 +715,7 @@ function guardWeekLine(gd) {
   else if (hd && hd.score != null) out.push(hd.score < 100 ? '<span class="' + (hd.score < 70 ? 'warn' : '') + '">Hardening ' + hd.score + '/100</span>' : 'Hardening OK');
   return out.length ? '<div class="sub">' + out.join(' - ') + '</div>' : '';
 }
-function shieldHowTo() { return '<div class="sub"><b style="color:#ece8f4">Shield isn\'t sharing counts.</b> In Shield 1.6 or newer: options page Update Hallow Shield to 1.6 and turn on <b>Share counts with the Hallow apps</b> in its options.gt; Stats Update Hallow Shield to 1.6 and turn on <b>Share counts with the Hallow apps</b> in its options.gt; turn on <b>Share counts with Hallow apps on this PC</b> (Hallow Setup 1.8 sets up its bridge).</div>'; }
+function shieldHowTo() { return '<div class="sub"><b style="color:var(--text)">Shield isn\'t sharing counts.</b> In Shield 1.6 or newer: options page Update Hallow Shield to 1.6 and turn on <b>Share counts with the Hallow apps</b> in its options.gt; Stats Update Hallow Shield to 1.6 and turn on <b>Share counts with the Hallow apps</b> in its options.gt; turn on <b>Share counts with Hallow apps on this PC</b> (Hallow Setup 1.8 sets up its bridge).</div>'; }
 function pcRows(pcs) {
   return pcs.map(function (p) {
     var t = p.online == 'waiting' ? 'Online' : p.online == 'busy' ? 'In a session' : p.online == 'offline' ? 'Offline' : 'Not checked yet';
@@ -692,12 +733,12 @@ function renderFam(s) {
     h += '<div class="kv"><b>Safety score</b><b>' + (gd.score == null ? '-' : gd.score) + (gd.familyScore != null ? ' <span class="sub">/ family ' + gd.familyScore + '</span>' : '') + '</b></div>';
     if (r) {
       h += '<div style="margin-top:10px"><b>' + esc(r.headline || 'Weekly report') + '</b><div class="sub">' + esc([r.week ? 'Week ' + r.week.replace(/^\d{4}-/, '') : '', r.when].filter(Boolean).join(' - ')) + '</div></div>';
-      h += '<div class="kv"><span>Score</span><span style="color:#ece8f4">' + (r.previous != null ? r.previous + ' &rarr; ' : '') + (r.score == null ? '-' : r.score) + (r.delta ? ' (' + (r.delta > 0 ? '+' : '') + r.delta + ')' : '') + '</span></div>';
-      h += '<div class="kv"><span>Fixed this week</span><span style="color:#ece8f4">' + r.fixed + '</span></div><div class="kv"><span>New this week</span><span class="' + (r.newIssues ? 'warn' : '') + '" style="' + (r.newIssues ? '' : 'color:#ece8f4') + '">' + r.newIssues + '</span></div>';
-      h += '<div class="kv"><span>Still to look at</span><span style="color:#ece8f4">' + r.issues + '</span></div><div class="kv"><span>Scans</span><span style="color:#ece8f4">' + r.scans + '</span></div>';
+      h += '<div class="kv"><span>Score</span><span style="color:var(--text)">' + (r.previous != null ? r.previous + ' &rarr; ' : '') + (r.score == null ? '-' : r.score) + (r.delta ? ' (' + (r.delta > 0 ? '+' : '') + r.delta + ')' : '') + '</span></div>';
+      h += '<div class="kv"><span>Fixed this week</span><span style="color:var(--text)">' + r.fixed + '</span></div><div class="kv"><span>New this week</span><span class="' + (r.newIssues ? 'warn' : '') + '" style="' + (r.newIssues ? '' : 'color:var(--text)') + '">' + r.newIssues + '</span></div>';
+      h += '<div class="kv"><span>Still to look at</span><span style="color:var(--text)">' + r.issues + '</span></div><div class="kv"><span>Scans</span><span style="color:var(--text)">' + r.scans + '</span></div>';
       if (r.summary) h += '<div class="sub" style="margin-top:6px">' + esc(r.summary) + '</div>';
     } else h += '<div class="sub" style="margin-top:8px">No weekly report yet.</div>';
-    if (hd) h += '<div class="kv" style="margin-top:10px"><span>Windows hardening</span><span class="' + (hd.warnings ? 'warn' : '') + '" style="' + (hd.warnings ? '' : 'color:#ece8f4') + '">' + (hd.warnings != null ? (hd.warnings ? hd.warnings + (hd.warnings == 1 ? ' warning' : ' warnings') : 'OK') + (hd.score != null ? ' - ' + hd.score + '/100' : '') : hd.score + '/100') + '</span></div>';
+    if (hd) h += '<div class="kv" style="margin-top:10px"><span>Windows hardening</span><span class="' + (hd.warnings ? 'warn' : '') + '" style="' + (hd.warnings ? '' : 'color:var(--text)') + '">' + (hd.warnings != null ? (hd.warnings ? hd.warnings + (hd.warnings == 1 ? ' warning' : ' warnings') : 'OK') + (hd.score != null ? ' - ' + hd.score + '/100' : '') : hd.score + '/100') + '</span></div>';
     h += '<div class="dbtns"><button class="btn" onclick="act(\'a=guard&do=report\')">Open report on PC</button>' + (hd ? '<button class="btn" onclick="act(\'a=guard&do=hardening\')">Hardening on PC</button>' : '') + '</div></div>';
   }
   var sh = s.shield;
@@ -705,8 +746,8 @@ function renderFam(s) {
     h += '<h2>Hallow Shield</h2><div class="card">';
     if (!sh.sharing) h += shieldHowTo();
     else {
-      h += '<div class="kv"><b>Blocked today</b><b class="good">' + num(sh.today) + '</b></div><div class="kv"><span>This week</span><span style="color:#ece8f4">' + num(sh.week) + '</span></div>' + (sh.banners != null ? '<div class="kv"><span>Cookie banners today</span><span style="color:#ece8f4">' + num(sh.banners) + '</span></div>' : '');
-      (sh.browsers || []).forEach(function (b) { h += '<div class="kv"><span>' + esc([b.name, b.profile && b.profile != 'Default' ? b.profile : ''].filter(Boolean).join(' - ')) + (b.level ? ' <small>(' + esc(b.level) + ')</small>' : '') + '</span><span style="color:#ece8f4">' + num(b.today) + ' / ' + num(b.week) + '</span></div>'; });
+      h += '<div class="kv"><b>Blocked today</b><b class="good">' + num(sh.today) + '</b></div><div class="kv"><span>This week</span><span style="color:var(--text)">' + num(sh.week) + '</span></div>' + (sh.banners != null ? '<div class="kv"><span>Cookie banners today</span><span style="color:var(--text)">' + num(sh.banners) + '</span></div>' : '');
+      (sh.browsers || []).forEach(function (b) { h += '<div class="kv"><span>' + esc([b.name, b.profile && b.profile != 'Default' ? b.profile : ''].filter(Boolean).join(' - ')) + (b.level ? ' <small>(' + esc(b.level) + ')</small>' : '') + '</span><span style="color:var(--text)">' + num(b.today) + ' / ' + num(b.week) + '</span></div>'; });
       if (sh.browsers && sh.browsers.length) h += '<div class="sub">Per browser: today / this week' + (sh.updated ? ' - updated ' + esc(sh.updated) : '') + '</div>';
     }
     h += '</div>';

@@ -7,6 +7,12 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.16
+- Light and dark mode. The PC window follows the Hallow setting in Hallow Toolkit (Light / Dark / Same as Windows),
+  or pick Light or Dark just for Hallow Remote under the accent switch (Look: Follow Hallow / Light / Dark).
+- The phone page follows your phone's light / dark setting, or pick Auto / Light / Dark at the bottom of Home
+  (kept on the phone).
+
 WHAT'S NEW IN 1.15
 - Mixer per-app volumes: under each channel on the Remote tab, a slider, Mute and Move for every app in Hallow Mixer (3.24 or newer).
 - Hallow Guard's weekly report and Windows hardening on Home, and a new Family tab with the whole report.

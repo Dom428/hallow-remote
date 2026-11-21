@@ -41,7 +41,8 @@ namespace HallowRemote
         [DataMember] public bool AllowUpload = false;      // v1.11: the phone may send files into Downloads\Hallow Remote (off by default)
         [DataMember] public int UploadMaxMB = 200;         // v1.11: the largest file the phone may send
         [DataMember] public List<Outgoing> Outbox = new List<Outgoing>();   // v1.11: files waiting for the phone (paths stay on the PC)
-        [OnDeserializing] void D(StreamingContext c) { AllowUpload = false; UploadMaxMB = 200; Outbox = new List<Outgoing>(); Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
+        [DataMember] public string Look = "follow";       // v1.16: follow (the Hallow setting in theme.json) / light / dark - this PC window only
+        [OnDeserializing] void D(StreamingContext c) { Look = "follow"; AllowUpload = false; UploadMaxMB = 200; Outbox = new List<Outgoing>(); Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
         [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); if (Launchers == null) Launchers = new List<Launcher>(); if (Outbox == null) Outbox = new List<Outgoing>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
@@ -183,7 +184,7 @@ namespace HallowRemote
         public void WriteStatus() { if (!Snap.On) Family.WriteStatus(StatusJson()); }
         public string Command(string line)
         {
-            if (line == "ping") return "ok " + Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version } });
+            if (line == "ping") return "ok " + Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version }, { "look", Look.IsLight ? "light" : "dark" } });   // v1.16: look = what the PC window shows now
             if (line == "status") return "ok " + StatusJson();
             if (line.StartsWith("keys-share ")) return KeysShare(line.Substring(11));   // v1.12: Hallow Keys asks for a one-time share link
             return "error unknown command";

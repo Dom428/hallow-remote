@@ -1,7 +1,8 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:h="clr-namespace:HallowRemote;assembly=HallowRemote">
-    <!-- Hallow Remote look: dark purple-black, orange accent. Loaded at runtime (no XAML compiler needed). -->
+    <!-- Hallow Remote look: dark purple-black, orange accent. Loaded at runtime (no XAML compiler needed). v1.16: light mode swaps these
+         values (Program.LightMap). #F07821 = the accent as a thin line / caret (darkened in light); #FEFEFE = the hover overlay (dark in light). -->
     <h:IconConv x:Key="IconConv"/><h:IconVis x:Key="IconVis"/><h:LabelVis x:Key="LabelVis"/><h:IconGap x:Key="IconGap"/>
     <SolidColorBrush x:Key="Bg" Color="#16121C"/>
     <SolidColorBrush x:Key="Panel" Color="#211B2A"/>
@@ -111,7 +112,7 @@
                 <ControlTemplate TargetType="ButtonBase">
                     <Grid>
                         <Border x:Name="b" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="8"/>
-                        <Border x:Name="hl" Background="#FFFFFF" Opacity="0" CornerRadius="8"/>
+                        <Border x:Name="hl" Background="#FEFEFE" Opacity="0" CornerRadius="8"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}">
                             <Path x:Name="ic" Data="{Binding Content, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource IconConv}}"
                                   Visibility="{Binding Content, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource IconVis}}"
@@ -231,7 +232,7 @@
     <!-- Search box -->
     <Style x:Key="Search" TargetType="TextBox">
         <Setter Property="Foreground" Value="#ECE8F4"/>
-        <Setter Property="CaretBrush" Value="#F07820"/>
+        <Setter Property="CaretBrush" Value="#F07821"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -240,7 +241,7 @@
                         <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#F07820"/></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#F07821"/></Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
@@ -249,7 +250,7 @@
     <!-- Plain text field -->
     <Style x:Key="Field" TargetType="TextBox">
         <Setter Property="Foreground" Value="#ECE8F4"/>
-        <Setter Property="CaretBrush" Value="#F07820"/>
+        <Setter Property="CaretBrush" Value="#F07821"/>
         <Setter Property="FontSize" Value="12.5"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -258,7 +259,7 @@
                         <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#F07820"/></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#F07821"/></Trigger>
                         <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
