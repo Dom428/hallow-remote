@@ -7,6 +7,14 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.18
+- Your phone controls the newer apps. A new Apps tab shows a card for each one you have installed: Hallow VPN (connect
+  fastest / best for gaming / disconnect when it uses IKEv2), Shield (blocked today), Browser (tabs), Home (cameras,
+  feeder, fountain, alerts - Feed now after a confirm), Tasks (CPU / RAM / GPU), Gear (batteries), Email (unread count)
+  and Financials (locked or not - Lock now).
+- A Torrents tab for Hallow Torrents: your torrents with progress and speeds, pause / resume, add a magnet link, search.
+- Nothing secret reaches the phone (no keys, addresses, account names, subjects or amounts), and the new actions are
+  protected against other web pages and rate-limited.
 WHAT'S NEW IN 1.17
 - Light mode readability fixes. On the PC window in light mode, a filled accent (Update / OK buttons and the picked chips)
   is darkened a little when its text wouldn't read well enough on it (e.g. a violet accent), the accent as text stays

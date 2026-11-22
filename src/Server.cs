@@ -236,9 +236,11 @@ namespace HallowRemote
                 var rest = "/" + string.Join("/", segs.Skip(1));
                 var q = Query(query);
                 // v1.11: POST only for a file from the phone (streamed to disk); everything else stays GET
-                if ((parts[0] == "POST") != (rest == "/api/upload" || rest == "/api/keys/change")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes(parts[0] == "POST" ? "Only GET" : "Only POST")); return; }
+                if ((parts[0] == "POST") != (rest == "/api/upload" || rest == "/api/keys/change" || rest == "/api/act")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes(parts[0] == "POST" ? "Only GET" : "Only POST")); return; }
                 if (rest == "/api/upload") { int code; var res = Upload(client, st, headers, q, buf, bodyAt, n, out code); Changed(); Send(st, code, "application/json", Encoding.UTF8.GetBytes(res)); }
                 else if (rest == "/api/keys/change") KeysChange(client, st, headers, buf, bodyAt, n);   // v1.12: a sealed change from the phone's Keys tab, passed to Hallow Keys
+                else if (rest == "/api/act") ActRequest(client, st, headers, q, buf, bodyAt, n);   // v1.18: the newer apps' actions (CSRF token, same origin, rate limit)
+                else if (rest == "/api/torrents") { client.SendTimeout = 10000; Send(st, 200, "application/json", Encoding.UTF8.GetBytes(TorrentsJson())); }   // v1.18: Hallow Torrents' list (names only on the phone page)
                 else if (rest.StartsWith("/api/get/"))   // v1.11: a file from the PC's "Send to phone" list, by its random id
                 {
                     var o = OutgoingById(rest.Substring(9));
@@ -304,7 +306,7 @@ namespace HallowRemote
         }
         static void Send(Stream st, int code, string type, byte[] body, bool cache = false)
         {
-            var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : code == 403 ? " Forbidden" : code == 400 ? " Bad Request" : code == 405 ? " Method Not Allowed" : code == 411 ? " Length Required" : code == 413 ? " Payload Too Large" : code == 507 ? " Insufficient Storage" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
+            var head = "HTTP/1.1 " + code + (code == 200 ? " OK" : code == 404 ? " Not Found" : code == 403 ? " Forbidden" : code == 400 ? " Bad Request" : code == 405 ? " Method Not Allowed" : code == 411 ? " Length Required" : code == 413 ? " Payload Too Large" : code == 429 ? " Too Many Requests" : code == 507 ? " Insufficient Storage" : " Error") + "\r\nContent-Type: " + type + "\r\nContent-Length: " + body.Length +
                 "\r\nCache-Control: " + (cache ? "max-age=3600" : "no-store") + (type.StartsWith("text/html") ? "\r\nContent-Security-Policy: " + Csp : "") + "\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nConnection: close\r\n\r\n";
             var h = Encoding.ASCII.GetBytes(head); st.Write(h, 0, h.Length); st.Write(body, 0, body.Length); st.Flush();
         }
@@ -627,7 +629,7 @@ namespace HallowRemote
         {
             double used = -1, total = -1;
             try { var m = new MEMORYSTATUSEX(); if (GlobalMemoryStatusEx(m)) { total = m.ullTotalPhys / 1073741824.0; used = (m.ullTotalPhys - m.ullAvailPhys) / 1073741824.0; } } catch { }
-            var hub = HubRecent();
+            var hub = HubRecent(); var apps2 = AppsState();
             var games = new List<object>();
             if (hub != null && hub.ContainsKey("games"))
                 foreach (var g in (System.Collections.ArrayList)hub["games"]) { var d = g as Dictionary<string, object>; if (d != null) games.Add(new Dictionary<string, object> { { "name", d["name"] }, { "playing", d["playing"] } }); }
@@ -646,6 +648,7 @@ namespace HallowRemote
                 { "keys", KeysState() },   // v1.10
                 { "guard", GuardState() }, { "assist", AssistState() },   // v1.13: Hallow Guard and Hallow Assist
                 { "shield", ShieldState() },   // v1.15: Hallow Shield's blocked counts
+                { "apps2", apps2 }, { "apps2live", AppsLive(apps2) }, { "csrf", CsrfToken },   // v1.18: VPN, Torrents, Gear, Home, Browser, Tasks, Email, Financials
                 { "files", FilesState() },   // v1.11: upload switch and the "Send to phone" list (names, sizes, random ids - never paths)
                 { "accent", Program.AccentHex }, { "onAccent", Accent.OnAccent(Program.AccentHex) },   // v1.5
                 { "time", DateTime.Now.ToString("HH:mm") } };
@@ -661,7 +664,7 @@ namespace HallowRemote
         string Snapshot()
         {
             var o = StateObj();
-            var k = new Dictionary<string, object>(o); k.Remove("stats"); k.Remove("time");
+            var k = new Dictionary<string, object>(o); k.Remove("stats"); k.Remove("time"); k.Remove("apps2live");
             var key = js.Serialize(k); int r;
             lock (live) { if (key != lastKey) { if (lastKey != null) rev++; lastKey = key; Monitor.PulseAll(live); } r = rev; }
             o["rev"] = r; return js.Serialize(o);

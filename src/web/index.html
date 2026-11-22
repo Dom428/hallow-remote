@@ -78,7 +78,19 @@ button.dc{font:inherit;color:inherit;text-align:left;width:100%}.dc.micon{backgr
 #splash{position:fixed;inset:0;z-index:9;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:opacity .35s}
 #splash img{width:112px;height:112px}#splash b{color:var(--accent-text);letter-spacing:2px;font-size:18px}#splash.gone{opacity:0;pointer-events:none}
 #player .bar{display:flex;justify-content:space-between;align-items:center;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;color:var(--text)}
-</style>
+/* v1.18: the newer apps (Apps tab) and Hallow Torrents (Torrents tab) */
+.grp{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grp .dc{min-height:0}
+.dc .sub b{color:var(--text)}.dc .kv{font-size:14px;margin:4px 0}.dc .dbtns{flex-wrap:wrap}.dc .dbtns .btn{flex:1 1 40%}
+.note2{color:var(--muted);font-size:12px;margin-top:8px}
+.gd{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid var(--line2);font-size:14px}.gd:first-of-type{border-top:0}.gd b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.gd span{white-space:nowrap}
+.tbar{height:6px;background:var(--btn);border-radius:4px;overflow:hidden;margin:6px 0 4px}.tbar i{display:block;height:100%;background:var(--accent-text)}
+.tr{padding:10px 0;border-top:1px solid var(--line2)}.tr:first-child{border-top:0}.tr .tn{font-weight:600;font-size:14px;overflow-wrap:anywhere}.tr .tl{display:flex;justify-content:space-between;align-items:center;gap:8px}.tr .tl .sub{flex:1;min-width:0}.tr .btn{min-height:40px;flex:0 0 auto}
+.tr.dim .tn{color:var(--muted)}
+textarea.in,input.in{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:9px;font:inherit}
+.frm{display:flex;gap:8px;margin-top:8px}.frm .btn{flex:0 0 auto}
+.banner{border:1px solid var(--amber);border-radius:14px;padding:10px 12px;margin-bottom:10px}.banner b{color:var(--warn-text)}
+.feedc{display:flex;align-items:center;gap:8px;margin-top:10px}.feedc .n{font-size:22px;font-weight:700;min-width:28px;text-align:center}
+.btn.danger{background:var(--redfill);color:#fff}</style>
 <script>
 // v1.16: light / dark. Auto follows the phone (prefers-color-scheme); Light or Dark is picked on Home and kept on this phone only.
 var lookPref = 'auto'; try { lookPref = localStorage.getItem('hallowLook') || 'auto'; } catch (e) { }
@@ -116,7 +128,7 @@ applyLook();
 <div id="splash"><img src="app-192.png" alt=""><b>HALLOW REMOTE</b><small class="sub" id="splmsg">Connecting to your PC...</small></div>
 <div id="notes"></div>
 <header><div><h1>HALLOW <span>REMOTE</span></h1><div class="sub" id="pc">Connecting...</div></div><div class="sub" id="time"></div></header>
-<div class="tabs" id="tabs"><button id="t_dash" class="on" onclick="tab('dash')">Home</button><button id="t_home" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button><button id="t_fam" onclick="tab('fam')" style="display:none">Family</button></div>
+<div class="tabs" id="tabs"><button id="t_dash" class="on" onclick="tab('dash')">Home</button><button id="t_home" onclick="tab('home')">Remote</button><button id="t_live" onclick="tab('live')">Stats</button><button id="t_mine" onclick="tab('mine')">Buttons</button><button id="t_pad" onclick="tab('pad')">Mouse</button><button id="t_files" onclick="tab('files')">Files</button><button id="t_keys" onclick="tab('keys')" style="display:none">Keys</button><button id="t_fam" onclick="tab('fam')" style="display:none">Family</button><button id="t_more" onclick="tab('more')" style="display:none">Apps</button><button id="t_tor" onclick="tab('tor')" style="display:none">Torrents</button></div>
 <div id="v_keys" style="display:none"></div>
 <div id="v_files" style="display:none"><h2>Send to your PC</h2><div id="upoff" class="card off">Sending files is off. Turn on <b>Let your phone send files to this PC</b> in Hallow Remote on your PC.</div><div id="upon" class="card" style="display:none"><input type="file" id="upfile" multiple style="display:none" onchange="upload(this.files)"><button class="btn go" style="width:100%" id="upbtn" onclick="el('upfile').click()">Choose files</button><div class="sub" id="upmsg" style="margin-top:8px"></div></div><h2>From your PC</h2><div id="outbox"></div></div>
 <div id="v_pad" style="display:none"><div id="padoff" class="card off" style="display:none">The mouse and keyboard are off. Turn on <b>Let your phone use the mouse and keyboard</b> in Hallow Remote on your PC.</div>
@@ -126,7 +138,7 @@ applyLook();
 <div class="keys" id="keys"></div></div></div>
 <div id="v_live" style="display:none"><div class="big" id="bigstats"></div><div class="src" id="livesrc"></div><div id="lastmatch"></div></div>
 <div id="v_mine" style="display:none"><div class="mine" id="minegrid"></div><div id="mineedit"></div><button class="btn" style="width:100%;margin-top:14px" id="editbtn" onclick="toggleEdit()">Edit my buttons</button></div>
-<div id="v_fam" style="display:none"></div>
+<div id="v_fam" style="display:none"></div><div id="v_more" style="display:none"></div><div id="v_tor" style="display:none"></div>
 <div id="v_dash"><div id="install"></div><div class="dash" id="dash"></div><div id="notecfg"></div><div id="lookcfg"></div></div>
 <div id="v_home" style="display:none">
 <div class="stats" id="stats"></div>
@@ -191,6 +203,8 @@ function render(s) {
   if (view == 'pad') { el('padoff').style.display = s.input ? 'none' : ''; el('padon').style.display = s.input ? '' : 'none'; }
   if (view == 'live') renderLive(s); if (view == 'mine') renderMine(s); if (view == 'files') renderFiles(s);
   var hasFam = !!(s.guard || s.shield || (s.assist && s.assist.pcs)); el('t_fam').style.display = hasFam ? '' : 'none'; if (view == 'fam') { if (hasFam) renderFam(s); else tab('dash'); }   // v1.15
+  var a2 = s.apps2 || {}, hasMore = ['vpn', 'gear', 'home', 'browser', 'tasks', 'email', 'financials'].some(function (k) { return a2[k]; }) || !!(s.shield && s.shield.sharing); el('t_more').style.display = hasMore ? '' : 'none'; el('t_tor').style.display = a2.torrents ? '' : 'none';   // v1.18
+  if (view == 'more') { if (hasMore) renderMore(s); else tab('dash'); } if (view == 'tor') { if (a2.torrents) renderTorTab(s); else tab('dash'); }
   if (s.accent && s.accent !== curAccent) { curAccent = s.accent; var rs = document.documentElement.style; rs.setProperty('--accent', s.accent); rs.setProperty('--on-accent', s.onAccent || '#1a0e04'); applyLook(); }   // v1.5: the Hallow accent
   el('pc').textContent = s.pc; el('time').textContent = s.time;
   var t = s.stats, ram = t.ramTotal > 0 ? t.ramUsed / t.ramTotal : 0;
@@ -286,7 +300,7 @@ function power(what) {
   act('a=power&do=' + what);
 }
 // ---- v1.6: tabs, Live stats, My buttons
-var view = 'dash', editing = false, catalog = [], mine = [], TABS = ['dash', 'home', 'live', 'mine', 'pad', 'files', 'keys', 'fam'];
+var view = 'dash', editing = false, catalog = [], mine = [], TABS = ['dash', 'home', 'live', 'mine', 'pad', 'files', 'keys', 'fam', 'more', 'tor'];
 function tab(v) {
   view = v; try { localStorage.setItem('hr_tab', v); } catch (e) { }
   var tb = el('t_' + v); if (tb && tb.scrollIntoView) tb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -836,11 +850,182 @@ function renderInstall() {
 })();
 (function () {   // the tab to open: ?tab=... (home-screen shortcuts), else the one you used last (never straight into Keys)
   var m = /[?&]tab=(\w+)/.exec(location.search), t = m ? m[1] : null; if (!t) try { t = localStorage.getItem('hr_tab'); } catch (e) { }
-  if (t && t !== 'keys' && t !== 'fam' && TABS.indexOf(t) >= 0) tab(t);
+  if (t && t !== 'keys' && t !== 'fam' && t !== 'more' && t !== 'tor' && TABS.indexOf(t) >= 0) tab(t);
   renderInstall(); renderNoteCfg();
   setTimeout(function () { var m2 = el('splmsg'); if (m2 && !last) m2.textContent = 'Still trying to reach your PC...'; }, 4000);
   setTimeout(function () { var sp = el('splash'); if (sp && !last) { sp.className = 'gone'; setTimeout(function () { sp.style.display = 'none'; }, 400); } }, 8000);
 })();
+// ---- v1.18: the newer apps. Actions are POSTs to api/act with this page's CSRF token (from api/state); the PC checks and rate-limits them.
+function post(params) {
+  var body = Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+  return fetch(base + 'api/act', { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Hallow-Csrf': (last && last.csrf) || '' }, body: body })
+    .then(function (r) { return r.json(); }).then(function (j) { if (j.msg) toast(j.msg); setTimeout(load, 400); return j; })
+    .catch(function () { toast('Your PC didn\'t answer'); return { ok: false }; });
+}
+function fmtB(n) { if (n == null) return '-'; var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + ' ' + u[i]; }
+function fmtS(bps) { return fmtB(bps || 0) + '/s'; }
+function fmtEta(s) { if (s == null) return ''; s = Math.round(s); return s >= 86400 ? Math.floor(s / 86400) + 'd' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : s >= 60 ? Math.floor(s / 60) + 'm' : s + 's'; }
+function notRunning(name) { return '<div class="sub">' + esc(name) + ' isn\'t running on your PC.</div>'; }
+var lastMore = '', feedArm = null, feedN = 1;
+function renderMore(s) {
+  var a2 = s.apps2 || {}, lv = s.apps2live || {}, k = JSON.stringify([a2, lv, s.shield, feedArm, feedN]); if (k === lastMore) return; lastMore = k;
+  var h = '', g;
+  // Network and privacy: VPN, Shield, Browser
+  g = '';
+  var v = a2.vpn;
+  if (v) {
+    g += '<div class="dc full" id="c_vpn"><h3>Hallow VPN</h3>';
+    if (!v.running) g += notRunning('Hallow VPN');
+    else {
+      g += '<div class="dv' + (v.connected ? ' good' : '') + '">' + (v.connected ? 'Connected' : v.connecting ? 'Connecting...' : v.paused ? 'Paused for a game' : 'Not connected') + '</div>';
+      if (v.connected) g += '<div class="sub"><b>' + esc(v.server || '') + '</b>' + (v.country ? ' - ' + esc(v.country) : '') + (v.protocol ? ' - ' + esc(v.protocol) : '') + '</div>';
+      g += '<div class="kv"><span>Kill switch</span><span class="' + (v.killSwitch ? 'good' : '') + '">' + (v.killSwitch ? 'On' : 'Off') + '</span></div>';
+      if (v.connected) g += '<div class="kv"><span>Leak check</span><span class="' + (v.leakCheck == 'ok' ? 'good' : v.leakCheck ? 'warn' : '') + '">' + (v.leakCheck == 'ok' ? 'No leaks' : v.leakCheck == 'warn' ? 'Check on the PC' : v.leakCheck == 'fail' ? 'Leak found - check on the PC' : 'Checking...') + '</span></div>';
+      if (!v.connected && !v.connecting && v.next) g += '<div class="kv"><span>Next connect</span><span>' + esc(v.next) + '</span></div>';
+      if (v.canConnect || v.canDisconnect) {
+        g += '<div class="dbtns">' + (v.canConnect ? '<button class="btn go" id="vpn_fast" onclick="post({app:\'vpn\',do:\'fastest\'})">Connect fastest</button><button class="btn" id="vpn_game" onclick="post({app:\'vpn\',do:\'gaming\'})">Best for gaming</button>' : '') +
+          (v.canDisconnect ? '<button class="btn" id="vpn_off" onclick="post({app:\'vpn\',do:\'disconnect\'})">Disconnect</button>' : '') + '</div>';
+      } else if ((v.connected || v.connecting ? v.protocol : v.next) == 'NordLynx') g += '<div class="note2" id="vpn_pc">NordLynx: connect and disconnect only from the PC (Windows asks there first).</div>';
+      else if (!v.connected && !v.connecting) g += '<div class="note2">Connect from the PC.</div>';
+    }
+    g += '</div>';
+  }
+  var sh = s.shield;
+  if (sh && sh.sharing) g += '<div class="dc"><h3>Hallow Shield</h3><div class="dv good">' + num(sh.today) + '</div><div class="sub">blocked today</div></div>';
+  var b = a2.browser;
+  if (b) {
+    g += '<div class="dc"><h3>Hallow Browser</h3>';
+    if (!b.running) g += '<div class="sub">Not open on your PC.</div>';
+    else g += '<div class="dv">' + num(b.tabs) + '</div><div class="sub">tabs' + (b.asleep ? ' - ' + b.asleep + ' asleep' : '') + '</div><div class="sub">Shield: <b>' + ({ extension: 'On', fallback: 'Basic', missing: 'Missing', starting: 'Starting' }[b.shield] || '-') + '</b>' + (b.shieldVersion && b.shield == 'extension' ? ' ' + esc(b.shieldVersion) : '') + '</div>';
+    g += '</div>';
+  }
+  if (g) h += '<h2>Network and privacy</h2><div class="grp">' + g + '</div>';
+  // Home
+  var ho = a2.home;
+  if (ho) {
+    g = '<div class="dc full" id="c_home"><h3>Hallow Home</h3>';
+    if (!ho.running) g += notRunning('Hallow Home');
+    else if (!ho.configured) g += '<div class="sub">Set up Home Assistant in Hallow Home on your PC.</div>';
+    else {
+      g += '<div class="kv"><span>Home Assistant</span><span class="' + (ho.connected ? 'good' : 'warn') + '">' + (ho.connected ? (ho.live ? 'Connected, live' : 'Connected') : 'Not connected') + '</span></div>';
+      if (ho.cameras) g += '<div class="kv"><span>Cameras online</span><span class="' + (ho.camerasOnline < ho.cameras ? 'warn' : '') + '">' + ho.camerasOnline + ' of ' + ho.cameras + '</span></div>';
+      var fd = ho.feeder, fo = ho.fountain;
+      if (fd) g += '<div class="kv"><span>Feeder</span><span class="' + (fd.foodLow || !fd.online ? 'warn' : '') + '">' + (fd.online ? (fd.foodLow ? 'Food low' : 'OK') : 'Offline') + (fd.todayMeals != null ? ' - ' + fd.todayMeals + ' meals today' : '') + '</span></div>' + (fd.nextFeed ? '<div class="kv"><span>Next meal</span><span>' + esc(fd.nextFeed) + '</span></div>' : '');
+      if (fo) g += '<div class="kv"><span>Fountain</span><span class="' + (fo.waterLow || !fo.online ? 'warn' : '') + '">' + (fo.online ? (fo.waterLow ? 'Water low' : 'OK') + (fo.waterPct != null ? ' - ' + fo.waterPct + '%' : '') + (fo.pumpOn === false ? ' - pump off' : '') : 'Offline') + '</span></div>' + (fo.filterDue || fo.cleaningDue ? '<div class="kv"><span>Due</span><span class="warn">' + [fo.filterDue ? 'filter' : '', fo.cleaningDue ? 'cleaning' : ''].filter(Boolean).join(', ') + '</span></div>' : '');
+      if (ho.lock && ho.lock != 'unknown') g += '<div class="kv"><span>Door lock</span><span>' + ({ 'bluetooth-only': 'Bluetooth only', unavailable: 'Unavailable', locked: 'Locked', unlocked: 'Unlocked', jammed: 'Jammed' }[ho.lock]) + '</span></div>';
+      g += '<div class="kv"><span>Alerts</span><span class="' + (ho.alerts ? 'warn' : '') + '">' + (ho.alerts ? ho.alerts + ' - ' + esc((ho.alertFlags || []).join(', ').replace(/-/g, ' ')) : 'None') + '</span></div>';
+      if (fd) {
+        if (feedArm) g += '<div class="feedc"><button class="btn" onclick="feedStep(-1)">-</button><span class="n" id="feed_n">' + feedN + '</span><button class="btn" onclick="feedStep(1)">+</button><span class="sub">' + (feedN == 1 ? 'portion' : 'portions') + '</span></div>' +
+          '<div class="dbtns"><button class="btn danger" id="feed_yes" onclick="feedGo()">Feed ' + feedN + ' now</button><button class="btn" id="feed_no" onclick="feedCancel()">Cancel</button></div>';
+        else g += '<div class="dbtns"><button class="btn go" id="feed_btn" onclick="feedOpen()"' + (fd.canFeed ? '' : ' disabled') + '>Feed now...</button></div>' + (fd.canFeed ? '' : '<div class="note2">The feeder can\'t feed right now.</div>');
+      }
+    }
+    g += '</div>';
+    h += '<h2>Home</h2><div class="grp">' + g + '</div>';
+  }
+  // This PC: Tasks, Gear
+  g = '';
+  var tk = a2.tasks;
+  if (tk) {
+    var tl = lv.tasks || {};
+    g += '<div class="dc full"><h3>Hallow Tasks</h3>' + (!tk.running ? notRunning('Hallow Tasks') : '<div class="stats" style="grid-template-columns:repeat(3,1fr)">' +
+      [['CPU', tl.cpu], ['RAM', tl.ram], ['GPU', tl.gpu]].map(function (x) { return '<div class="stat" style="background:var(--btn)"><b>' + (x[1] == null ? '-' : x[1] + '%') + '</b><small>' + x[0] + '</small></div>'; }).join('') + '</div>' +
+      (tk.sampled ? '<div class="note2">Measured ' + esc(tk.sampled) + '</div>' : '')) + '</div>';
+  }
+  var ge = a2.gear;
+  if (ge) {
+    g += '<div class="dc full"><h3>Hallow Gear</h3>';
+    if (!ge.running) g += notRunning('Hallow Gear');
+    else if (!ge.devices.length) g += '<div class="sub">No devices found.</div>';
+    else g += ge.devices.map(function (d) {
+      var st = !d.connected ? 'Not connected' : d.asleep ? 'Asleep' : d.charging ? 'Charging' : d.wired && d.battery == null ? 'Wired' : d.full ? 'Full' : '';
+      var low = d.battery != null && d.battery <= ge.lowAt && !d.charging;
+      return '<div class="gd"><b>' + esc(d.name || d.kind) + '</b><span><span class="' + (low ? 'warn' : '') + '">' + (d.battery != null ? d.battery + '%' : '') + '</span>' + (st ? ' <span class="sub">' + st + '</span>' : '') + '</span></div>';
+    }).join('');
+    g += '</div>';
+  }
+  if (g) h += '<h2>This PC</h2><div class="grp">' + g + '</div>';
+  // Personal: Email, Financials
+  g = '';
+  var em = a2.email;
+  if (em) g += '<div class="dc"><h3>Hallow Email</h3>' + (!em.running ? notRunning('Hallow Email') : '<div class="dv">' + num(em.unread) + '</div><div class="sub">unread</div>') + '</div>';
+  var fi = a2.financials;
+  if (fi) {
+    g += '<div class="dc" id="c_fin"><h3>Hallow Financials</h3>';
+    if (!fi.running) g += notRunning('Hallow Financials');
+    else if (!fi.vault) g += '<div class="sub">No vault yet.</div>';
+    else g += '<div class="dv' + (fi.locked ? ' good' : '') + '">' + (fi.locked ? 'Locked' : 'Unlocked') + '</div>' + (fi.locked ? '' : '<div class="dbtns"><button class="btn go" id="fin_lock" onclick="post({app:\'fin\',do:\'lock\'})">Lock now</button></div>');
+    g += '</div>';
+  }
+  if (g) h += '<h2>Personal</h2><div class="grp">' + g + '</div>';
+  el('v_more').innerHTML = h;
+}
+function feedOpen() { feedArm = 1; feedN = 1; lastMore = ''; renderMore(last); }
+function feedCancel() { feedArm = null; lastMore = ''; renderMore(last); }
+function feedStep(d) { feedN = Math.max(1, Math.min(12, feedN + d)); lastMore = ''; renderMore(last); }
+function feedGo() { var n = feedN; feedArm = null; lastMore = ''; renderMore(last); post({ app: 'home', do: 'feed', n: n, confirm: 'yes' }); }
+// ---- Torrents tab: the list comes from api/torrents (every 2 s while the tab is open)
+var torTimer = null, torData = null, torBuilt = false, torLast = '';
+function renderTorTab(s) {
+  if (!torBuilt) {
+    torBuilt = true;
+    var cats = ['Movies', 'TV', 'Music', 'Games', 'Other'], opts = '<option value="">Category: let Torrents pick</option>' + cats.map(function (c) { return '<option>' + c + '</option>'; }).join('');
+    el('v_tor').innerHTML = '<div id="tor_head"></div><div id="tor_list"></div>' +
+      '<h2>Add a magnet link</h2><div class="card"><textarea class="in" id="tor_mag" rows="2" placeholder="magnet:?xt=urn:btih:..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="frm"><select id="tor_cat">' + opts + '</select><button class="btn go" id="tor_addbtn" onclick="torAdd()">Add</button></div><div class="note2">It starts only over the VPN.</div></div>' +
+      '<div id="tor_searchbox" style="display:none"><h2>Search</h2><div class="card"><div class="frm" style="margin-top:0"><input class="in" id="tor_q" placeholder="Search your indexers" autocomplete="off" onkeydown="if(event.key==\'Enter\')torSearch()"><button class="btn go" id="tor_sbtn" onclick="torSearch()">Search</button></div><div class="frm"><select id="tor_scat"><option value="">All kinds</option><option value="movies">Movies</option><option value="tv">TV</option><option value="music">Music</option><option value="games">Games</option><option value="software">Software</option><option value="books">Books</option><option value="other">Other</option></select></div><div id="tor_results"></div></div></div>';
+  }
+  if (!torTimer) torPoll();
+}
+function torPoll() {
+  clearTimeout(torTimer); torTimer = null;
+  if (view != 'tor') return;
+  fetch(base + 'api/torrents', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { torData = j; torRender(); }).catch(function () { })
+    .then(function () { if (view == 'tor') torTimer = setTimeout(torPoll, document.hidden ? 6000 : 2000); });
+}
+function torRender() {
+  var j = torData; if (!j) return; var k = JSON.stringify(j); if (k === torLast) return; torLast = k;
+  var hd = '', l = '';
+  if (!j.ok) hd = '<div class="card sub">' + esc(j.msg) + '</div>';
+  else if (!j.running) hd = '<div class="card">' + notRunning('Hallow Torrents') + '</div>';
+  else if (j.old) hd = '<div class="card sub">Update Hallow Torrents to 1.4 or newer to use it from the phone.</div>';
+  else {
+    var v = last && last.apps2 && last.apps2.vpn;
+    if (j.held == 'vpn' || j.vpnLocked) hd += '<div class="banner" id="tor_lock"><b>Waiting for the VPN</b><div class="sub">Torrents run only over the VPN.</div>' + (v && v.canConnect ? '<div class="dbtns"><button class="btn go" onclick="post({app:\'vpn\',do:\'fastest\'})">Connect Hallow VPN</button></div>' : v && v.running && (v.next == 'NordLynx') ? '<div class="note2">Connect Hallow VPN from the PC (NordLynx).</div>' : '') + '</div>';
+    else if (j.held == 'game') hd += '<div class="banner"><b>Paused for a game</b>' + (j.game ? '<div class="sub">' + esc(j.game) + '</div>' : '') + '</div>';
+    var st = j.stats || {};
+    hd += '<div class="stats" style="grid-template-columns:repeat(3,1fr)"><div class="stat"><b>' + fmtS(j.down) + '</b><small>Down</small></div><div class="stat"><b>' + fmtS(j.up) + '</b><small>Up</small></div><div class="stat"><b>' + j.torrents.length + '</b><small>Torrents</small></div></div>';
+    if (st.session || st.allTime) hd += '<div class="src">' + (st.session ? 'This session: ' + fmtB(st.session.down) + ' down, ' + fmtB(st.session.up) + ' up' : '') + (st.allTime && st.allTime.ratio != null ? ' - ratio ' + st.allTime.ratio.toFixed(2) + ' all time' : '') + '</div>';
+    hd += '<div class="dbtns" style="margin:10px 0 0"><button class="btn" id="tor_pauseall" onclick="post({app:\'tor\',do:\'pauseall\'})">Pause all</button><button class="btn" id="tor_resumeall" onclick="post({app:\'tor\',do:\'resumeall\'})">Resume all</button></div>';
+    l = '<h2>Transfers</h2><div class="card">' + (j.torrents.length ? j.torrents.map(function (t) {
+      var pct = Math.floor((t.progress || 0) * 1000) / 10, info = [t.state, pct + '%'];
+      if (!t.complete && t.down) info.push('\u2193 ' + fmtS(t.down)); if (t.up) info.push('\u2191 ' + fmtS(t.up)); if (t.eta != null && !t.complete && t.down) info.push(fmtEta(t.eta));
+      return '<div class="tr' + (t.paused ? ' dim' : '') + '" data-id="' + esc(t.id) + '"><div class="tn">' + esc(t.name || 'Torrent') + '</div><div class="tbar"><i style="width:' + Math.min(100, pct) + '%"></i></div>' +
+        '<div class="tl"><div class="sub">' + info.map(esc).join(' - ') + (t.category ? ' - ' + esc(t.category) : '') + (t.vpnLocked ? ' - <span class="warn">VPN locked</span>' : '') + (t.flagged ? '<br><span class="warn">Check before opening on the PC</span>' : '') + '</div>' +
+        '<button class="btn" onclick="post({app:\'tor\',do:\'' + (t.paused ? 'resume' : 'pause') + '\',id:\'' + esc(t.id) + '\'})">' + (t.paused ? 'Resume' : 'Pause') + '</button></div></div>';
+    }).join('') : '<div class="sub">No torrents.</div>') + '</div>';
+  }
+  el('tor_head').innerHTML = hd; el('tor_list').innerHTML = l;
+  el('tor_searchbox').style.display = j.ok && j.running && j.canSearch ? '' : 'none';
+}
+function torAdd() {
+  var m = el('tor_mag').value.trim(); if (!m) { toast('Paste a magnet link'); return; }
+  var b = el('tor_addbtn'); b.disabled = true;
+  post({ app: 'tor', do: 'add', magnet: m, cat: el('tor_cat').value }).then(function (j) { b.disabled = false; if (j.ok) el('tor_mag').value = ''; torLast = ''; torPoll(); });
+}
+var torResults = [];
+function torSearch() {
+  var q = el('tor_q').value.trim(); if (q.length < 2) { toast('Type what to search for'); return; }
+  var b = el('tor_sbtn'); b.disabled = true; b.textContent = 'Searching...'; el('tor_results').innerHTML = '<div class="note2">Searching your indexers over the VPN - this can take up to 20 s.</div>';
+  post({ app: 'tor', do: 'search', q: q, scat: el('tor_scat').value }).then(function (j) {
+    b.disabled = false; b.textContent = 'Search'; torResults = j.results || [];
+    el('tor_results').innerHTML = !j.ok ? '<div class="note2">' + esc(j.msg || '') + '</div>' : !torResults.length ? '<div class="note2">Nothing found.</div>' : torResults.map(function (r, i) {
+      var bad = r.flags && r.flags.length;
+      return '<div class="tr' + (bad ? ' dim' : '') + '"><div class="tn">' + esc(r.title) + '</div><div class="tl"><div class="sub">' + [fmtB(r.size), (r.seeders == null ? '-' : r.seeders) + ' seeders', r.resolution, r.category, r.when].filter(Boolean).map(esc).join(' - ') +
+        (bad ? '<br><span class="warn">' + esc(r.flags.join(', ')) + '</span>' : '') + '</div>' + (r.inList ? '<span class="sub">In your list</span>' : '<button class="btn" onclick="torSearchAdd(' + i + ',this)">Add</button>') + '</div></div>';
+    }).join('');
+  });
+}
+function torSearchAdd(i, b) { var r = torResults[i]; if (!r) return; b.disabled = true; post({ app: 'tor', do: 'searchadd', id: r.id, cat: '' }).then(function (j) { if (j.ok) b.textContent = 'Added'; else b.disabled = false; torLast = ''; torPoll(); }); }
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })
