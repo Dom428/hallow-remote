@@ -243,6 +243,9 @@ namespace HallowRemote
                 case "tor:search": return TimeSpan.FromSeconds(4);
                 case "tor:add": return TimeSpan.FromSeconds(2);
                 case "fin": return TimeSpan.FromSeconds(2);
+                case "auth:backup": return TimeSpan.FromSeconds(10);   // v1.19
+                case "auth:mirror": return TimeSpan.FromSeconds(2);
+                case "auth:xfer": return TimeSpan.Zero;   // counted in the 30 a minute only (the id is 128 random bits)
                 default: return TimeSpan.FromMilliseconds(300);
             }
         }

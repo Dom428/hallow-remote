@@ -41,8 +41,9 @@ namespace HallowRemote
         [DataMember] public bool AllowUpload = false;      // v1.11: the phone may send files into Downloads\Hallow Remote (off by default)
         [DataMember] public int UploadMaxMB = 200;         // v1.11: the largest file the phone may send
         [DataMember] public List<Outgoing> Outbox = new List<Outgoing>();   // v1.11: files waiting for the phone (paths stay on the PC)
+        [DataMember] public double WinW = 600, WinH = 640;   // v1.19: the window size you gave it
         [DataMember] public string Look = "follow";       // v1.16: follow (the Hallow setting in theme.json) / light / dark - this PC window only
-        [OnDeserializing] void D(StreamingContext c) { Look = "follow"; AllowUpload = false; UploadMaxMB = 200; Outbox = new List<Outgoing>(); Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
+        [OnDeserializing] void D(StreamingContext c) { WinW = 600; WinH = 640; Look = "follow"; AllowUpload = false; UploadMaxMB = 200; Outbox = new List<Outgoing>(); Launchers = new List<Launcher>(); AllowClipboard = false; AllowPeek = false; Code = ""; Network = "tailscale"; Port = 5480; TrayOnClose = true; UseHallowIcon = true; UseHallowAccent = true; LastCrashShown = ""; Buttons = new List<MyButton>(); AllowInput = false; LastUpdateCheck = ""; }
         [OnDeserialized] void After(StreamingContext c) { if (Buttons == null) Buttons = new List<MyButton>(); if (Launchers == null) Launchers = new List<Launcher>(); if (Outbox == null) Outbox = new List<Outgoing>(); }
         // HALLOW_REMOTE_TESTDIR (developer tests only): settings and the other apps' files come from that folder instead, so tests never touch the real ones
         public static string TestDir { get { var t = Environment.GetEnvironmentVariable("HALLOW_REMOTE_TESTDIR"); return string.IsNullOrEmpty(t) ? null : t; } }
@@ -187,6 +188,7 @@ namespace HallowRemote
             if (line == "ping") return "ok " + Family.Json(new Dictionary<string, object> { { "app", "Remote" }, { "version", Program.Version }, { "look", Look.IsLight ? "light" : "dark" } });   // v1.16: look = what the PC window shows now
             if (line == "status") return "ok " + StatusJson();
             if (line.StartsWith("keys-share ")) return KeysShare(line.Substring(11));   // v1.12: Hallow Keys asks for a one-time share link
+            if (line.StartsWith("auth-offer")) { var sp = line.IndexOf(' '); if (sp > 0) { var c = line.Substring(0, sp); if (c == "auth-offer" || c == "auth-offer-state" || c == "auth-offer-cancel") return AuthOfferCmd(c, line.Substring(sp + 1)); } }   // v1.19: Hallow Keys -> Hallow Authenticator
             return "error unknown command";
         }
 
@@ -234,6 +236,7 @@ namespace HallowRemote
                     st.Write(h, 0, h.Length); st.Flush(); return;
                 }
                 var rest = "/" + string.Join("/", segs.Skip(1));
+                if (rest == "/auth" || rest.StartsWith("/auth/")) { AuthRequest(client, st, headers, parts[0], rest == "/auth" && path.EndsWith("/") ? "/auth/" : rest, target, buf, bodyAt, n); return; }   // v1.19: Hallow Authenticator
                 var q = Query(query);
                 // v1.11: POST only for a file from the phone (streamed to disk); everything else stays GET
                 if ((parts[0] == "POST") != (rest == "/api/upload" || rest == "/api/keys/change" || rest == "/api/act")) { Send(st, 405, "text/plain", Encoding.ASCII.GetBytes(parts[0] == "POST" ? "Only GET" : "Only POST")); return; }
@@ -646,6 +649,7 @@ namespace HallowRemote
                 { "apps", AppsJson() },  // v1.8: names only (never paths)
                 { "clipboard", S.AllowClipboard && !Paused }, { "peek", S.AllowPeek && !Paused },   // v1.9
                 { "keys", KeysState() },   // v1.10
+                { "auth", AuthState() },   // v1.19: Hallow Authenticator (HTTPS on? how many encrypted backups)
                 { "guard", GuardState() }, { "assist", AssistState() },   // v1.13: Hallow Guard and Hallow Assist
                 { "shield", ShieldState() },   // v1.15: Hallow Shield's blocked counts
                 { "apps2", apps2 }, { "apps2live", AppsLive(apps2) }, { "csrf", CsrfToken },   // v1.18: VPN, Torrents, Gear, Home, Browser, Tasks, Email, Financials
@@ -680,7 +684,8 @@ namespace HallowRemote
             }
             return Snapshot();
         }
-        public void Changed() { kick.Set(); }   // something was done from the phone
+        public void Changed() { kick.Set(); }
+        public DateTime LastPhoneSeen { get { lock (live) return lastWaiter; } }   // v1.19: when a phone last had the page open (UTC; MinValue = not since start)   // something was done from the phone
         void Watch()
         {
             while (true)

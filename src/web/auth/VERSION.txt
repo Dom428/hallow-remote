@@ -1,0 +1,2 @@
+Hallow Authenticator 1.0 - a copy of the app folder of https://github.com/Dom428/hallow-authenticator (release v1.0).
+These files are embedded in HallowRemote.exe and served at https://<your PC>:<port>/<code>/auth/. To update them, run tools\sync-to-remote.ps1 in the Authenticator repo.

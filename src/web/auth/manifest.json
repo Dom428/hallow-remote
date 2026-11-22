@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Hallow Authenticator",
+  "short_name": "Authenticator",
+  "description": "Your 2FA codes, kept on this phone - part of the Hallow family",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16121c",
+  "theme_color": "#16121c",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-mask-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

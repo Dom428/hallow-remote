@@ -90,7 +90,8 @@ textarea.in,input.in{width:100%;background:var(--bg);border:1px solid var(--line
 .frm{display:flex;gap:8px;margin-top:8px}.frm .btn{flex:0 0 auto}
 .banner{border:1px solid var(--amber);border-radius:14px;padding:10px 12px;margin-bottom:10px}.banner b{color:var(--warn-text)}
 .feedc{display:flex;align-items:center;gap:8px;margin-top:10px}.feedc .n{font-size:22px;font-weight:700;min-width:28px;text-align:center}
-.btn.danger{background:var(--redfill);color:#fff}</style>
+.btn.danger{background:var(--redfill);color:#fff}
+a.btn{display:flex;align-items:center;justify-content:center;text-decoration:none}</style>
 <script>
 // v1.16: light / dark. Auto follows the phone (prefers-color-scheme); Light or Dark is picked on Home and kept on this phone only.
 var lookPref = 'auto'; try { lookPref = localStorage.getItem('hallowLook') || 'auto'; } catch (e) { }
@@ -668,7 +669,7 @@ function playingGame(s) {
   return g ? g.name : (s.mixer && s.mixer.game) || (s.overlay && s.overlay.live && s.overlay.live.game) || (s.clips && s.clips.recording && s.clips.game) || null;
 }
 function renderDash(s) {
-  var k = JSON.stringify([s.games, s.hub, s.mixer && s.mixer.mic, s.mixer && s.mixer.nowPlaying, s.mixer && s.mixer.game, s.sys && s.sys.np, s.overlay, s.session, s.clips, s.vault, s.guard, s.assist, s.shield, !!armedDash.disc]);
+  var k = JSON.stringify([s.games, s.hub, s.mixer && s.mixer.mic, s.mixer && s.mixer.nowPlaying, s.mixer && s.mixer.game, s.sys && s.sys.np, s.overlay, s.session, s.clips, s.vault, s.guard, s.assist, s.shield, !!armedDash.disc, s.auth && s.auth.https]);
   if (k === lastDash) return; lastDash = k;
   var h = '', game = playingGame(s), q = function (x) { return esc(x).replace(/'/g, ''); };
   // what's running
@@ -717,6 +718,9 @@ function renderDash(s) {
   // saves (Hallow Vault)
   var v = s.vault;
   if (v) { var lastG = v.games.filter(function (g) { return g.last; })[0]; h += '<div class="dc full" id="d_vault"><h3>Saves</h3><div class="sub">' + (v.busy ? 'Backing up now...' : lastG ? 'Last backup: ' + esc(lastG.name) + ', ' + esc(lastG.last) : 'No backups yet') + '</div><div class="dbtns"><button class="btn" ' + (v.busy ? 'disabled' : '') + ' onclick="act(\'a=backup\')">Back up now</button></div></div>'; }
+  // v1.19: Hallow Authenticator - the 2FA app that lives on this phone (opens without the PC once installed)
+  var au = s.auth;
+  if (au) h += '<div class="dc full" id="d_auth"><h3>Authenticator</h3><div class="sub">Your 2FA codes, kept on this phone - works offline once installed' + (au.https ? '' : '. <b class="warn">Needs HTTPS:</b> turn it on in Hallow Remote on your PC') + '</div>' + (au.https ? '<div class="dbtns"><a class="btn go" id="d_authopen" href="auth/">Open Hallow Authenticator</a></div>' : '') + '</div>';
   if (!s.mixer && !gd && !as && !v && !s.clips && !np && !sh) h += '<div class="dc full off">Start Hallow Mixer, Clips, Vault, Guard or Assist on your PC and they show up here.</div>';
   el('dash').innerHTML = h;
 }

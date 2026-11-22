@@ -7,6 +7,15 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.19
+- Hallow Authenticator: your 2FA codes on your phone, a replacement for Microsoft Authenticator. On the phone's Home tab
+  tap Authenticator (needs HTTPS - see below), install it, and add your accounts. The codes stay on the phone, encrypted,
+  and work with the PC off. Remote only keeps encrypted backups the phone sends (it can't open them) in
+  %APPDATA%HallowAuthenticatorackups - copy them to your NAS if you like - and carries Hallow Keys 2.11's one-time,
+  end-to-end sealed transfer of your 2FA codes to the phone.
+- A smaller, tidier PC window: the code, link, an on / off switch and whether your phone is connected on top; the rest
+  (permissions, apps, files, advanced settings, help) in sections you open. It remembers the size you give it.
+
 WHAT'S NEW IN 1.18
 - Your phone controls the newer apps. A new Apps tab shows a card for each one you have installed: Hallow VPN (connect
   fastest / best for gaming / disconnect when it uses IKEv2), Shield (blocked today), Browser (tabs), Home (cameras,

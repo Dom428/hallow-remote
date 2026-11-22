@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex"><meta name="referrer" content="no-referrer">
+<meta name="theme-color" content="#16121c" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#f6f4fa" media="(prefers-color-scheme: light)">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Authenticator">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+<title>Hallow Authenticator</title>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<div id="app">
+  <section id="v_lock" class="view">
+    <div class="lockbox">
+      <img src="icon-192.png" alt="" class="logo">
+      <h1>HALLOW <span>AUTHENTICATOR</span></h1>
+      <div id="lockbody"></div>
+    </div>
+  </section>
+  <section id="v_main" class="view hidden">
+    <header class="top">
+      <h1>HALLOW <span>AUTHENTICATOR</span></h1>
+      <div class="tbtns"><button id="b_add" class="ib" aria-label="Add an account">+</button><button id="b_set" class="ib" aria-label="Settings">&#9881;</button><button id="b_lock" class="ib" aria-label="Lock now">&#128274;</button></div>
+    </header>
+    <div id="installbar"></div>
+    <input id="search" class="in search" type="search" placeholder="Search" autocomplete="off" aria-label="Search accounts">
+    <div id="list" class="list"></div>
+  </section>
+  <section id="v_sheet" class="view hidden">
+    <header class="top"><button id="b_back" class="ib" aria-label="Back">&#8592;</button><h2 id="sheettitle"></h2><span></span></header>
+    <div id="sheet"></div>
+  </section>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+</body></html>

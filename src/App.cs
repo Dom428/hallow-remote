@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.18.0.0")]
-[assembly: AssemblyFileVersion("1.18.0.0")]
+[assembly: AssemblyVersion("1.19.0.0")]
+[assembly: AssemblyFileVersion("1.19.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.18";
+        public const string Version = "1.19";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -96,12 +96,14 @@ namespace HallowRemote
         public MainWindow(bool hidden)
         {
             startHidden = hidden; server = new Server(S);
-            Title = "Hallow Remote"; Width = 640; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.CanMinimize;
+            Title = "Hallow Remote"; Width = Math.Max(520, Math.Min(1600, S.WinW)); Height = Math.Max(420, Math.Min(1400, S.WinH)); MinWidth = 520; MinHeight = 420; ResizeMode = ResizeMode.CanResize;   // v1.19: compact, resizable, remembered
             Background = (Brush)FindResource("Bg"); Foreground = (Brush)FindResource("Text"); FontFamily = new FontFamily("Segoe UI"); FontSize = 12.5;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             try { Icon = AppIcon(); } catch { }
             Content = Build();
             Look.Track(this);   // v1.16: the title bar matches light / dark
+            var sizeSave = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) }; sizeSave.Tick += (s, e) => { sizeSave.Stop(); if (WindowState == WindowState.Normal && !Snap.On) { S.WinW = Math.Round(ActualWidth); S.WinH = Math.Round(ActualHeight); S.Save(); } };
+            SizeChanged += (s, e) => { if (IsVisible) { sizeSave.Stop(); sizeSave.Start(); } };   // v1.19: the size you give it is remembered
             Closing += (s, e) =>
             {
                 if (!exiting && S.TrayOnClose && !Snap.On)
@@ -171,104 +173,120 @@ namespace HallowRemote
             return Imaging.CreateBitmapSourceFromHIcon(ico.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
         }
 
+        // v1.19: a compact window - the essentials on top (code, link, on / off, your phone), everything else in sections that open
+        // when you click them (Phone permissions, Apps, Files, Advanced, Help). Fits a 1366x768 screen; the size you give it is remembered.
+        CheckBox onSwitch; TextBlock phoneLine;
+        StackPanel Section(StackPanel parent, string title, string summary, bool open)
+        {
+            var body = new StackPanel { Margin = new Thickness(14, 2, 0, 6), Visibility = open ? Visibility.Visible : Visibility.Collapsed };
+            var head = new Button { Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Left, Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 6, 0, 0) };
+            var ht = new TextBlock(); var arrow = new System.Windows.Documents.Run(open ? "▾  " : "▸  ");
+            ht.Inlines.Add(arrow); ht.Inlines.Add(new System.Windows.Documents.Run(title) { FontWeight = FontWeights.SemiBold });
+            if (summary != null) ht.Inlines.Add(new System.Windows.Documents.Run("   " + summary) { Foreground = (Brush)FindResource("Muted"), FontSize = 11.5 });
+            head.Content = ht; head.SizeChanged += (s, e) => ht.Width = Math.Max(0, head.ActualWidth - 24);   // left-aligned, whatever the button template does
+            head.Click += (s, e) => { var on = body.Visibility != Visibility.Visible; body.Visibility = on ? Visibility.Visible : Visibility.Collapsed; arrow.Text = on ? "▾  " : "▸  "; };
+            parent.Children.Add(head); parent.Children.Add(body);
+            return body;
+        }
+        TextBlock Muted(string text, double size = 11.5) { return new TextBlock { Text = text, Foreground = (Brush)FindResource("Muted"), FontSize = size, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) }; }
+
         UIElement Build()
         {
-            var sp = new StackPanel { Margin = new Thickness(26, 16, 26, 20) };
-            var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 14) };
-            try { title.Children.Add(new Image { Source = AppIcon(), Width = 30, Height = 30, Margin = new Thickness(0, 0, 10, 0) }); } catch { }
-            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 22, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentText), VerticalAlignment = VerticalAlignment.Center });
-            title.Children.Add(new TextBlock { Text = " REMOTE", FontSize = 22, FontWeight = FontWeights.Light, VerticalAlignment = VerticalAlignment.Center });
+            var sp = new StackPanel { Margin = new Thickness(20, 12, 20, 16) };
+            var title = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            try { title.Children.Add(new Image { Source = AppIcon(), Width = 26, Height = 26, Margin = new Thickness(0, 0, 8, 0) }); } catch { }
+            title.Children.Add(new TextBlock { Text = "HALLOW", FontSize = 19, FontWeight = FontWeights.Bold, Foreground = B(Program.AccentText), VerticalAlignment = VerticalAlignment.Center });
+            title.Children.Add(new TextBlock { Text = " REMOTE", FontSize = 19, FontWeight = FontWeights.Light, VerticalAlignment = VerticalAlignment.Center });
             // v1.7: "Update to vX" appears here when GitHub has a newer Hallow Remote
-            updateBtn = new Button { Style = (Style)FindResource("Accent"), Visibility = pending != null ? Visibility.Visible : Visibility.Collapsed, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            updateBtn = new Button { Style = (Style)FindResource("Accent"), Visibility = pending != null ? Visibility.Visible : Visibility.Collapsed, Margin = new Thickness(14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             if (pending != null) updateBtn.Content = "Update to v" + pending.Version.ToString(2);
             updateBtn.Click += (s, e) => InstallUpdate();
             title.Children.Add(updateBtn);
             sp.Children.Add(title);
+            // ---- the essentials: the code, the link, on / off, your phone
             var row = new DockPanel();
-            var qrBox = new Border { Background = Brushes.White, CornerRadius = new CornerRadius(14), Padding = new Thickness(12), Width = 214, Height = 214, Margin = new Thickness(0, 0, 20, 0), VerticalAlignment = VerticalAlignment.Top };
+            var qrBox = new Border { Background = Brushes.White, CornerRadius = new CornerRadius(12), Padding = new Thickness(8), Width = 168, Height = 168, Margin = new Thickness(0, 0, 16, 0), VerticalAlignment = VerticalAlignment.Top };
             qr = new Image { Stretch = Stretch.Uniform }; RenderOptions.SetBitmapScalingMode(qr, BitmapScalingMode.NearestNeighbor);
             qrBox.Child = qr; DockPanel.SetDock(qrBox, Dock.Left); row.Children.Add(qrBox);
             var info = new StackPanel();
-            info.Children.Add(new TextBlock { Text = "Scan this with your phone's camera", FontSize = 16, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
-            info.Children.Add(new TextBlock { Text = "Then use your browser's \"Add to Home screen\" so it opens like an app. You get Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, your PC's stats, files both ways and sleep / shut down / lock.",
-                Foreground = (Brush)FindResource("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) });
-            link = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Text"), Margin = new Thickness(0, 0, 0, 10) };
+            info.Children.Add(new TextBlock { Text = "Scan with your phone's camera", FontSize = 15, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 2) });
+            info.Children.Add(Muted("Then \"Add to Home screen\" so it opens like an app.", 12));
+            link = new TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Text"), Margin = new Thickness(0, 4, 0, 8) };
             info.Children.Add(link);
             var btns = new WrapPanel();
-            var copy = new Button { Content = "Copy link", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 8) };
+            var copy = new Button { Content = "Copy link", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 6, 6) };
             copy.Click += (s, e) => { if (server.Link != null) { Clipboard.SetText(server.Link); state.Text = "Link copied."; } };
-            var open = new Button { Content = "Open on this PC", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 8) };
+            var open = new Button { Content = "Open on this PC", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 6, 6) };
             open.Click += (s, e) => { if (server.Link != null) try { System.Diagnostics.Process.Start(server.Link); } catch { } };
-            var renew = new Button { Content = "New link", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 8), ToolTip = "Makes a new secret link - the old one stops working (scan the new code)" };
+            var renew = new Button { Content = "New link", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 6, 6), ToolTip = "Makes a new secret link - the old one stops working (scan the new code)" };
             renew.Click += (s, e) =>
             {
                 if (MessageBox.Show(this, "Make a new link? The old one stops working right away, so you'll scan the new code on your phone.", "Hallow Remote", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
                 S.Code = RemoteSettings.NewCode(); S.Save(); server.Start(); ShowLink(); state.Text = "New link made - the old one no longer works.";
             };
-            var upd = new Button { Content = "Check for updates", Style = (Style)FindResource("Btn"), Margin = new Thickness(0, 0, 8, 8) }; upd.Click += (s, e) => CheckForUpdate(true);
-            btns.Children.Add(copy); btns.Children.Add(open); btns.Children.Add(renew); btns.Children.Add(upd);
+            btns.Children.Add(copy); btns.Children.Add(open); btns.Children.Add(renew);
             info.Children.Add(btns);
+            onSwitch = new CheckBox { Content = new TextBlock { Text = "Remote on (your phone can reach this PC)" }, IsChecked = !paused, Style = (Style)FindResource("Switch") };
+            onSwitch.Click += (s, e) => { if ((onSwitch.IsChecked == true) == paused) Invoke("pause"); onSwitch.IsChecked = !paused; };
+            info.Children.Add(onSwitch);
+            phoneLine = new TextBlock { Foreground = (Brush)FindResource("Muted"), FontSize = 12 };
+            info.Children.Add(phoneLine);
             row.Children.Add(info);
             sp.Children.Add(row);
-            state = new TextBlock { Margin = new Thickness(0, 14, 0, 4), TextWrapping = TextWrapping.Wrap };
+            state = new TextBlock { Margin = new Thickness(0, 10, 0, 2), TextWrapping = TextWrapping.Wrap };
             sp.Children.Add(state);
-            // network
-            var nrow = new DockPanel { Margin = new Thickness(0, 10, 0, 0) };
-            nrow.Children.Add(new TextBlock { Text = "Reach it", Width = 90, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }); DockPanel.SetDock(nrow.Children[0], Dock.Left);
+            log = new TextBlock { Foreground = (Brush)FindResource("Muted"), FontSize = 12, TextWrapping = TextWrapping.Wrap };
+            sp.Children.Add(log);
+            // network, in one line
+            var nrow = new DockPanel { Margin = new Thickness(0, 8, 0, 0) };
+            nrow.Children.Add(new TextBlock { Text = "Reach it", Width = 70, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center }); DockPanel.SetDock(nrow.Children[0], Dock.Left);
             netChips = new StackPanel { Orientation = Orientation.Horizontal };
             foreach (var o in new[] { Tuple.Create("tailscale", "Anywhere (Tailscale)"), Tuple.Create("lan", "Home Wi-Fi only") })
             {
-                var key = o.Item1; var c = new ToggleButton { Content = o.Item2, Style = (Style)FindResource("Chip"), Margin = new Thickness(0, 0, 6, 0), IsChecked = S.Network == key, Padding = new Thickness(12, 5, 12, 5) };
+                var key = o.Item1; var c = new ToggleButton { Content = o.Item2, Style = (Style)FindResource("Chip"), Margin = new Thickness(0, 0, 6, 0), IsChecked = S.Network == key, Padding = new Thickness(10, 4, 10, 4) };
                 c.Click += (s, e) => { S.Network = key; S.Save(); foreach (ToggleButton x in netChips.Children) x.IsChecked = x == c; server.Start(); ShowLink(); };
                 netChips.Children.Add(c);
             }
             nrow.Children.Add(netChips); sp.Children.Add(nrow);
-            var more = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
-            Action<string, bool, Action<bool>> sw = (text, on, set) =>
+            // v1.3: HTTPS - one line, the steps behind "How"
+            var hn = new StackPanel();
+            var hHead = new DockPanel();
+            var how = new Button { Content = "How", Style = (Style)FindResource("Btn"), Padding = new Thickness(10, 2, 10, 2) }; DockPanel.SetDock(how, Dock.Right); hHead.Children.Add(how);
+            hHead.Children.Add(new TextBlock { Text = "HTTPS is off - needed for Keys and Authenticator on the phone.", VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap });
+            hn.Children.Add(hHead);
+            var steps = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+            httpsText = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 0, 0, 6) };
+            steps.Children.Add(httpsText);
+            httpsCmd = new TextBox { IsReadOnly = true, FontFamily = new FontFamily("Consolas"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Background = Look.IsLight ? B(Look.LPanel2) : B("#1A1522"), Foreground = B("#ECE8F4"), BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 0, 6) };
+            steps.Children.Add(httpsCmd);
+            var copyCmd = new Button { Content = "Copy command", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left };
+            copyCmd.Click += (s, e) => { try { Clipboard.SetText(httpsCmd.Text); state.Text = "Command copied - paste it into PowerShell after turning on HTTPS in Tailscale."; } catch { } };
+            steps.Children.Add(copyCmd); hn.Children.Add(steps);
+            how.Click += (s, e) => steps.Visibility = steps.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+            httpsNote = new Border { Child = hn, Background = B("#211B2A"), CornerRadius = new CornerRadius(10), Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 10, 0, 4) };
+            sp.Children.Add(httpsNote);
+            // ---- Phone permissions (all off by default)
+            int allowed = (S.AllowInput ? 1 : 0) + (S.AllowClipboard ? 1 : 0) + (S.AllowPeek ? 1 : 0) + (S.AllowUpload ? 1 : 0);
+            var perm = Section(sp, "Phone permissions", allowed == 0 ? "all off" : allowed + " on", false);
+            Action<StackPanel, string, bool, Action<bool>> sw = (into, text, on, set) =>
             {
                 var c = new CheckBox { Content = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap }, IsChecked = on, Style = (Style)FindResource("Switch") };
-                c.Click += (s, e) => { set(c.IsChecked == true); S.Save(); }; more.Children.Add(c);
+                c.Click += (s, e) => { set(c.IsChecked == true); S.Save(); }; into.Children.Add(c);
             };
-            sw("Keep running in the tray when I close this window", S.TrayOnClose, v => S.TrayOnClose = v);
-            sw("Start with Windows (in the tray)", StartsWithWindows(), v => SetStartWithWindows(v));
-            sw("Use the Hallow icon (when Hallow Hub runs, Hallow Remote lives in its tray menu instead of having its own icon)", S.UseHallowIcon, v => { S.UseHallowIcon = v; CheckHost(); });
-            sw("Use the Hallow accent (the colour picked in Hallow Toolkit, here and on your phone)", S.UseHallowAccent, v => { S.UseHallowAccent = v; S.Save(); Dispatcher.BeginInvoke(new Action(ApplyAccent)); });
-            // v1.16: light / dark - follows the Hallow setting (Hallow Toolkit) unless picked here
-            var lookRow = new DockPanel { Margin = new Thickness(50, 0, 0, 8) };
-            var lookLbl = new TextBlock { Text = "Look", Width = 50, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource("Muted") }; DockPanel.SetDock(lookLbl, Dock.Left); lookRow.Children.Add(lookLbl);
-            var lookChips = new StackPanel { Orientation = Orientation.Horizontal };
-            foreach (var o in new[] { Tuple.Create(Look.Follow, "Follow Hallow"), Tuple.Create(Look.Light, "Light"), Tuple.Create(Look.Dark, "Dark") })
-            {
-                var key = o.Item1; var c = new ToggleButton { Content = o.Item2, Style = (Style)FindResource("Chip"), Margin = new Thickness(0, 0, 6, 0), IsChecked = Look.Normalize(S.Look) == key, Padding = new Thickness(12, 4, 12, 4) };
-                c.Click += (s, e) => { S.Look = key; S.Save(); foreach (ToggleButton x in lookChips.Children) x.IsChecked = x == c; Dispatcher.BeginInvoke(new Action(ApplyAccent)); };
-                lookChips.Children.Add(c);
-            }
-            lookRow.Children.Add(lookChips); more.Children.Add(lookRow);
             // v1.7: trackpad and keyboard from the phone - off by default, with a clear warning
-            sw("Let your phone use the mouse and keyboard (trackpad and typing on the Mouse page)", S.AllowInput, v => { S.AllowInput = v; S.Save(); server.Changed(); inputWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
-            inputWarn = new TextBlock { Text = "Anyone with your link can now move the mouse and type on this PC - like sitting at it. Turn it off when you don't need it; Pause the remote also stops it.",
+            sw(perm, "Mouse and keyboard (the Mouse page)", S.AllowInput, v => { S.AllowInput = v; S.Save(); server.Changed(); inputWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
+            inputWarn = new TextBlock { Text = "Anyone with your link can now use the mouse and type here. Pause the remote also stops it.",
                 Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -2, 0, 6), Visibility = S.AllowInput ? Visibility.Visible : Visibility.Collapsed };
-            more.Children.Add(inputWarn);
+            perm.Children.Add(inputWarn);
             // v1.9: clipboard and screen peek - both off by default
-            sw("Let your phone send text to this PC's clipboard", S.AllowClipboard, v => { S.AllowClipboard = v; S.Save(); server.Changed(); });
-            sw("Let your phone peek at the screen (one picture each time you ask)", S.AllowPeek, v => { S.AllowPeek = v; S.Save(); server.Changed(); peekWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
-            peekWarn = new TextBlock { Text = "Your phone gets a picture of your main screen when you tap Peek - whatever is on it (messages, open documents) is in the picture. This PC tells you each time. Pause the remote also stops it.",
+            sw(perm, "Send text to this PC's clipboard", S.AllowClipboard, v => { S.AllowClipboard = v; S.Save(); server.Changed(); });
+            sw(perm, "Screen peek (one picture each time you ask)", S.AllowPeek, v => { S.AllowPeek = v; S.Save(); server.Changed(); peekWarn.Visibility = v ? Visibility.Visible : Visibility.Collapsed; });
+            peekWarn = new TextBlock { Text = "The picture shows whatever is on your main screen. This PC tells you each time.",
                 Foreground = B("#F0BE5A"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(50, -2, 0, 6), Visibility = S.AllowPeek ? Visibility.Visible : Visibility.Collapsed };
-            more.Children.Add(peekWarn);
-            sp.Children.Add(more);
-            // v1.8: apps your phone can open - chosen here only; the phone sees their names, never paths, and can't add any
-            var appsHead = new DockPanel { Margin = new Thickness(0, 14, 0, 4) };
-            var addApp = new Button { Content = "Add an app", Style = (Style)FindResource("Btn") }; addApp.Click += (s, e) => AddLauncher();
-            DockPanel.SetDock(addApp, Dock.Right); appsHead.Children.Add(addApp);
-            appsHead.Children.Add(new TextBlock { Text = "Apps your phone can open", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-            sp.Children.Add(appsHead);
-            appsList = new StackPanel(); sp.Children.Add(appsList); RefreshApps();
-            // v1.11: files - from the phone into Downloads\Hallow Remote (off by default), and a "Send to phone" list filled here only
-            var filesHead = new DockPanel { Margin = new Thickness(0, 14, 0, 4) };
-            filesHead.Children.Add(new TextBlock { Text = "Files", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-            sp.Children.Add(filesHead);
-            var upSw = new CheckBox { Content = new TextBlock { Text = "Let your phone send files to this PC (saved in Downloads\\Hallow Remote)", TextWrapping = TextWrapping.Wrap }, IsChecked = S.AllowUpload, Style = (Style)FindResource("Switch") };
-            sp.Children.Add(upSw);
+            perm.Children.Add(peekWarn);
+            // v1.11: files from the phone into Downloads\Hallow Remote (off by default)
+            var upSw = new CheckBox { Content = new TextBlock { Text = "Receive files (into Downloads\\Hallow Remote)", TextWrapping = TextWrapping.Wrap }, IsChecked = S.AllowUpload, Style = (Style)FindResource("Switch") };
+            perm.Children.Add(upSw);
             var upRow = new WrapPanel { Margin = new Thickness(50, 0, 0, 6), Visibility = S.AllowUpload ? Visibility.Visible : Visibility.Collapsed };
             upRow.Children.Add(new TextBlock { Text = "Up to", Foreground = (Brush)FindResource("Muted"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) });
             var sizes = new StackPanel { Orientation = Orientation.Horizontal };
@@ -282,32 +300,53 @@ namespace HallowRemote
             var openDl = new Button { Content = "Open the folder", Style = (Style)FindResource("Btn"), Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(8, 0, 0, 0) };
             openDl.Click += (s, e) => { try { System.IO.Directory.CreateDirectory(Files.UploadDir); System.Diagnostics.Process.Start("explorer.exe", "\"" + Files.UploadDir + "\""); } catch { } };
             upRow.Children.Add(openDl);
-            sp.Children.Add(upRow);
+            perm.Children.Add(upRow);
             upSw.Click += (s, e) => { S.AllowUpload = upSw.IsChecked == true; S.Save(); server.Changed(); upRow.Visibility = S.AllowUpload ? Visibility.Visible : Visibility.Collapsed; };
-            var outHead = new DockPanel { Margin = new Thickness(0, 8, 0, 4) };
-            var addOut = new Button { Content = "Add a file", Style = (Style)FindResource("Btn") }; addOut.Click += (s, e) => PickOutgoing();
-            DockPanel.SetDock(addOut, Dock.Right); outHead.Children.Add(addOut);
-            outHead.Children.Add(new TextBlock { Text = "Send to phone", FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-            sp.Children.Add(outHead);
-            outList = new StackPanel(); sp.Children.Add(outList); RefreshOutbox();
-            log = new TextBlock { Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 10, 0, 0) };
-            sp.Children.Add(log);
-            // v1.3: how to turn on HTTPS (shown in Tailscale mode until a certificate is in place)
-            var hn = new StackPanel();
-            hn.Children.Add(new TextBlock { Text = "Turn on HTTPS (optional)", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-            httpsText = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = (Brush)FindResource("Muted"), Margin = new Thickness(0, 0, 0, 8) };
-            hn.Children.Add(httpsText);
-            httpsCmd = new TextBox { IsReadOnly = true, FontFamily = new FontFamily("Consolas"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Background = Look.IsLight ? B(Look.LPanel2) : B("#1A1522"), Foreground = B("#ECE8F4"), BorderThickness = new Thickness(0), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 0, 0, 8) };
-            hn.Children.Add(httpsCmd);
-            var copyCmd = new Button { Content = "Copy command", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left };
-            copyCmd.Click += (s, e) => { try { Clipboard.SetText(httpsCmd.Text); state.Text = "Command copied - paste it into PowerShell after turning on HTTPS in Tailscale."; } catch { } };
-            hn.Children.Add(copyCmd);
-            httpsNote = new Border { Child = hn, Background = B("#211B2A"), CornerRadius = new CornerRadius(10), Padding = new Thickness(14, 10, 14, 12), Margin = new Thickness(0, 12, 0, 0) };
-            sp.Children.Add(httpsNote);            sp.Children.Add(new TextBlock { Text = "Only someone with the link can use it - keep it to yourself, and press New link if it ever gets out. It works only on your home network or through your own Tailscale. " +
-                "The first time, Windows may ask whether Hallow Remote can use the network: allow it for private networks.",
-                Foreground = (Brush)FindResource("Muted"), FontSize = 11.5, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 12, 0, 0) });
-            sp.Children.Add(new TextBlock { Text = "Hallow Remote " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 8, 0, 0) });
-            return sp;
+            // ---- v1.8: apps your phone can open - chosen here only; the phone sees their names, never paths
+            int nApps; lock (S) nApps = S.Launchers.Count;
+            var apps = Section(sp, "Apps your phone can open", nApps == 0 ? "none" : nApps.ToString(), false);
+            var addApp = new Button { Content = "Add an app", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 4) }; addApp.Click += (s, e) => AddLauncher();
+            apps.Children.Add(addApp);
+            appsList = new StackPanel(); apps.Children.Add(appsList); RefreshApps();
+            // ---- v1.11: the "Send to phone" list (drag files onto the window works with the section closed too)
+            var files = Section(sp, "Send files to your phone", "or drag them onto this window", false);
+            var addOut = new Button { Content = "Add a file", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 0, 0, 4) }; addOut.Click += (s, e) => PickOutgoing();
+            files.Children.Add(addOut);
+            outList = new StackPanel(); files.Children.Add(outList); RefreshOutbox();
+            // ---- Advanced
+            var adv = Section(sp, "Advanced", null, false);
+            sw(adv, "Keep running in the tray when I close this window", S.TrayOnClose, v => S.TrayOnClose = v);
+            sw(adv, "Start with Windows (in the tray)", StartsWithWindows(), v => SetStartWithWindows(v));
+            sw(adv, "Use the Hallow icon (lives in Hallow Hub's tray menu)", S.UseHallowIcon, v => { S.UseHallowIcon = v; CheckHost(); });
+            sw(adv, "Use the Hallow accent (from Hallow Toolkit)", S.UseHallowAccent, v => { S.UseHallowAccent = v; S.Save(); Dispatcher.BeginInvoke(new Action(ApplyAccent)); });
+            // v1.16: light / dark - follows the Hallow setting (Hallow Toolkit) unless picked here
+            var lookRow = new DockPanel { Margin = new Thickness(50, 0, 0, 8) };
+            var lookLbl = new TextBlock { Text = "Look", Width = 50, VerticalAlignment = VerticalAlignment.Center, Foreground = (Brush)FindResource("Muted") }; DockPanel.SetDock(lookLbl, Dock.Left); lookRow.Children.Add(lookLbl);
+            var lookChips = new StackPanel { Orientation = Orientation.Horizontal };
+            foreach (var o in new[] { Tuple.Create(Look.Follow, "Follow Hallow"), Tuple.Create(Look.Light, "Light"), Tuple.Create(Look.Dark, "Dark") })
+            {
+                var key = o.Item1; var c = new ToggleButton { Content = o.Item2, Style = (Style)FindResource("Chip"), Margin = new Thickness(0, 0, 6, 0), IsChecked = Look.Normalize(S.Look) == key, Padding = new Thickness(12, 4, 12, 4) };
+                c.Click += (s, e) => { S.Look = key; S.Save(); foreach (ToggleButton x in lookChips.Children) x.IsChecked = x == c; Dispatcher.BeginInvoke(new Action(ApplyAccent)); };
+                lookChips.Children.Add(c);
+            }
+            lookRow.Children.Add(lookChips); adv.Children.Add(lookRow);
+            var upd = new Button { Content = "Check for updates", Style = (Style)FindResource("Btn"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) }; upd.Click += (s, e) => CheckForUpdate(true);
+            adv.Children.Add(upd);
+            // ---- Help (what used to be the long texts)
+            var help = Section(sp, "Help", null, false);
+            help.Children.Add(Muted("Your phone gets Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, the newer apps, Hallow Keys and Hallow Authenticator, your PC's stats, files both ways and sleep / shut down / lock."));
+            help.Children.Add(Muted("Only someone with the link can use it - keep it to yourself, and press New link if it ever gets out. It works only on your home network or through your own Tailscale. The first time, Windows may ask whether Hallow Remote can use the network: allow it for private networks."));
+            help.Children.Add(Muted("Hallow Authenticator: your 2FA codes on the phone (Home > Authenticator on the phone, needs HTTPS). Encrypted backups the phone sends are kept, unopened, in %APPDATA%\\HallowAuthenticator\\backups."));
+            sp.Children.Add(new TextBlock { Text = "Hallow Remote " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 10, 0, 0) });
+            var phoneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; phoneTimer.Tick += (s, e) => ShowPhone(); phoneTimer.Start(); ShowPhone();
+            return new ScrollViewer { Content = sp, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        }
+        void ShowPhone()
+        {
+            if (phoneLine == null) return;
+            var t = server.LastPhoneSeen;
+            phoneLine.Text = t == DateTime.MinValue ? "Your phone: not connected since Remote started" : (DateTime.UtcNow - t).TotalSeconds < 15 ? "Your phone: connected now" : "Your phone: last seen " + t.ToLocalTime().ToString("HH:mm");
+            if (Snap.On) phoneLine.Text = "Your phone: connected now";
         }
 
         void ShowLink()
@@ -318,7 +357,8 @@ namespace HallowRemote
             state.Text = server.Error ?? (S.Network == "lan" ? "Ready on your home network. Your phone has to be on the same Wi-Fi." : "Ready through Tailscale - works wherever your phone has Tailscale on.");
             state.Foreground = server.Error != null ? B("#F0BE5A") : B("#6ED28C");
             if (server.Error == null && server.Https) state.Text = "Ready through Tailscale, with HTTPS (certificate good until " + server.CertUntil.ToString("d MMM yyyy") + ").";
-            if (paused) { state.Text = "Paused - your phone can't reach this PC until you resume it (tray menu)."; state.Foreground = B("#F0BE5A"); }
+            if (paused) { state.Text = "Paused - your phone can't reach this PC until you turn Remote on again."; state.Foreground = B("#F0BE5A"); }
+            if (onSwitch != null) onSwitch.IsChecked = !paused;
             ShowHttpsNote(Tls.TailscaleName(), server.TlsProblem);
         }
         void ShowHttpsNote(string name, string problem)
@@ -604,13 +644,27 @@ namespace HallowRemote
             });
         }
 
+        // --snap: opens every section (to show nothing was lost)
+        static void OpenAllSections(DependencyObject d)
+        {
+            if (d == null) return;
+            var b = d as Button; var t = b == null ? null : b.Content as TextBlock;
+            if (t != null && t.Inlines.FirstInline is System.Windows.Documents.Run && ((System.Windows.Documents.Run)t.Inlines.FirstInline).Text.StartsWith("▸")) b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var sv = d as ScrollViewer; if (sv != null) { OpenAllSections(sv.Content as DependencyObject); return; }
+            var p = d as Panel; if (p != null) foreach (UIElement c in p.Children.Cast<UIElement>().ToList()) OpenAllSections(c);
+            var bd = d as Border; if (bd != null) OpenAllSections(bd.Child);
+        }
         public void SnapAll(string dir)
         {
             // never show the real secret in a picture
             link.Text = "http://100.90.88.26:5480/example-code/"; qr.Source = QrImage(link.Text);
             state.Text = "Ready through Tailscale - works wherever your phone has Tailscale on."; state.Foreground = B("#6ED28C");
             ShowHttpsNote("gaming-pc.tail1234.ts.net", null);
-            Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), 640, 0);
+            ShowPhone();
+            Snap.Save(this, System.IO.Path.Combine(dir, "main.png"), Width, Height);                 // v1.19: the default size (fits 1366x768)
+            Snap.Save(this, System.IO.Path.Combine(dir, "main-1080.png"), 760, 960);              // made bigger on a 1920x1080 screen
+            OpenAllSections(Content as DependencyObject);
+            Snap.Save(this, System.IO.Path.Combine(dir, "main-open.png"), Width, 0);              // every section opened (all of it is still there)
             Snap.Save(CrashWindow(System.IO.Path.Combine(dir, "example.txt")), System.IO.Path.Combine(dir, "crash.png"), 440, 0);
         }
     }
