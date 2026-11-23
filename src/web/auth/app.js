@@ -1,14 +1,16 @@
 // Hallow Authenticator - the phone app. Your 2FA codes live on this phone only (encrypted in IndexedDB); Hallow Remote just delivers the
 // page and, when you ask, keeps encrypted backups it can't read. Nothing secret goes to the PC unless you turn on the PC mirror.
 import { codeFor, nowSeconds, normalize, parseOtpauth, toOtpauth, clearKeyCache, b64ToBytes, bytesToB64, base32Encode } from './otp.js';
-import { Vault, idbStorage, Locker, WrongPasscode, makeBackup, readBackup, waitAfterFails, rand } from './vault.js';
+import { Vault, idbStorage, Locker, WrongPasscode, readAnyBackup, backupKind, waitAfterFails, rand, backupKeyFrom, makeBackupWithKey, markBackedUp, backupStatus, autoBackupDue, STALE_DAYS } from './vault.js';
+import { otpauthList, aegisExport, googleMigration, googleCan } from './exporters.js';
+import { qrSvg } from './qrcode.js';
 import { decodeImage } from './qr.js';
 import { parseAny, transferIds, openTransfer, normalizeCode, mirrorKeyFrom, sealMirror } from './importers.js';
 
-export const VERSION = '1.0';
+export const VERSION = '1.1';
 const $ = id => document.getElementById(id);
 const vault = new Vault(idbStorage());
-let csrf = null, online = false, hello = null, installEvt = null;
+let csrf = null, online = false, hello = null, installEvt = null, cfg = {}, storageState = { supported: false, persisted: false, asked: 0 };
 const locker = new Locker(why => lockNow(why === 'idle' ? 'Locked after a few minutes without use.' : null));
 
 // ---- tiny DOM helpers (text only - nothing from a QR code or a file is ever put in as HTML)
@@ -92,7 +94,7 @@ function setupScreen(b) {
     if (p1.value.length < 6) { st.textContent = 'Use at least 6 characters - a longer passphrase is much stronger.'; return; }
     if (p1.value !== p2.value) { st.textContent = 'The two passcodes don\'t match.'; return; }
     go.disabled = true; st.textContent = 'Setting up (a second or two)...';
-    try { await vault.create(p1.value); p1.value = p2.value = ''; await unlocked(); toast('Ready - add your first account with +'); }
+    try { await vault.create(p1.value); p1.value = p2.value = ''; await askPersist(); await unlocked(); toast('Ready - add your first account with +'); }
     catch (x) { st.textContent = x.message; go.disabled = false; }
   });
   b.append(h('div', { cls: 'card' },
@@ -102,9 +104,21 @@ function setupScreen(b) {
   if (isIos() && !standalone()) b.append(h('div', { cls: 'banner', text: 'On iPhone: first tap Share, then Add to Home Screen, and set up the app from the Home Screen icon - Safari and the Home Screen app keep separate data.' }));
 }
 async function unlocked() {
-  const s = await vault.settings(); locker.set(s.lockMinutes, s.lockHidden); locker.arm();
-  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (x) { }
+  const s = cfg = await vault.settings(); locker.set(s.lockMinutes, s.lockHidden); locker.arm();
+  if (!storageState.persisted) askPersist();
   show('v_main'); renderList(); renderInstall();
+  setTimeout(() => maybeAutoBackup(false), 1500);
+}
+// 1.1: ask the browser to keep this site's data (IndexedDB) even when the phone runs low on space - at setup and on every start until
+// it says yes. It doesn't stop "Clear browsing data" for this site (Settings explains that).
+async function askPersist() {
+  try {
+    if (!(navigator.storage && navigator.storage.persist)) return storageState;
+    storageState.supported = true;
+    storageState.persisted = await navigator.storage.persisted();
+    if (!storageState.persisted) { storageState.asked++; storageState.persisted = await navigator.storage.persist(); }
+  } catch (x) { }
+  return storageState;
 }
 function lockNow(msg) { vault.lock(); clearKeyCache(); locker.disarm(); $('list').textContent = ''; $('sheet').textContent = ''; stopCamera(); showLock(msg || null); }
 
@@ -147,8 +161,21 @@ function sorted() {
     .sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || (a.issuer || a.label).localeCompare(b.issuer || b.label, undefined, { sensitivity: 'base' }) || a.label.localeCompare(b.label));
 }
 const spaced = c => (c.length === 6 ? c.slice(0, 3) + ' ' + c.slice(3) : c.length === 8 ? c.slice(0, 4) + ' ' + c.slice(4) : c);
+// 1.1: "Hide codes until tapped" - a tap shows the code for 20 s (and copies it)
+const revealed = new Map(), REVEAL_MS = 20000;
+const isHidden = e => cfg.hideCodes && !((revealed.get(e.id) || 0) > Date.now());
+// 1.1: the backup reminders above the list
+function renderBackupBar() {
+  const b = $('backupbar'); if (!b) return; b.textContent = '';
+  if (!vault.unlocked || !vault.data.entries.length) return;
+  const st = backupStatus(vault.data, Date.now()), go = h('button', { cls: 'btn go', id: 'b_backupnow', text: 'Back up', onclick: () => backupSheet(false, () => { show('v_main'); renderList(); }) });
+  if (st.never) b.append(h('div', { cls: 'banner warnb', id: 'bb_never' }, h('b', { text: 'No backup yet. ' }), h('span', { text: 'If this phone is lost, reset or its browser data is cleared, these codes are gone. Make an encrypted backup (a file, or your PC).' }), go));
+  else if (st.notIn > 0) b.append(h('div', { cls: 'banner', id: 'bb_notin' }, h('span', { text: st.notIn + (st.notIn === 1 ? ' account is' : ' accounts are') + ' not in your latest backup' + (cfg.autoBackup ? ' (the automatic backup to your PC sends at most one a day).' : '.') + ' ' }), go));
+  else if (st.stale) b.append(h('div', { cls: 'banner soft', id: 'bb_stale' }, h('span', { text: 'Your last backup was ' + st.days + ' days ago. A fresh one only takes a moment. ' }), go));
+}
 function renderList() {
   const list = $('list'); list.textContent = '';
+  renderBackupBar();
   if (!vault.unlocked) return;
   const items = sorted();
   if (!vault.data.entries.length) list.append(h('div', { cls: 'card empty' }, h('p', { text: 'No accounts yet.' }), h('button', { cls: 'btn go', text: 'Add an account', onclick: addSheet }), h('p', { cls: 'sub small', text: 'Moving from Microsoft Authenticator? ' }, h('button', { cls: 'btn', text: 'How to move', onclick: msGuide }))));
@@ -165,7 +192,8 @@ function renderList() {
         h('span', { cls: 'star' + (e.fav ? ' on' : ''), role: 'button', 'aria-label': e.fav ? 'Unpin' : 'Pin to the top', text: e.fav ? '★' : '☆', onclick: async ev => { ev.stopPropagation(); e.fav = !e.fav; await saveAll(); renderList(); } }),
         h('span', { cls: 'more', role: 'button', 'aria-label': 'Edit ' + name, text: '⋯', onclick: ev => { ev.stopPropagation(); editSheet(e); } })));
     card.querySelector('.tile').style.background = tileColor(name);
-    card.addEventListener('click', () => copyCode(e, code.dataset.code));
+    card.addEventListener('click', () => { if (cfg.hideCodes) { revealed.set(e.id, Date.now() + REVEAL_MS); tick(true); } copyCode(e, code.dataset.code); });
+    if (e.notes) card.querySelector('.mid').append(h('div', { cls: 'lb notesmark', text: 'Has backup codes / notes' }));
     card._u = { e, code, next, fg, secs };
     list.append(card);
   }
@@ -173,15 +201,17 @@ function renderList() {
 }
 async function tick(force) {
   if (!vault.unlocked) return;
-  const now = Date.now() / 1000, s = await vault.settings();
+  const now = Date.now() / 1000, s = cfg;
   for (const card of $('list').children) {
     const u = card._u; if (!u) continue; const e = u.e;
-    if (e.type === 'hotp') { const c = e.lastCode || ''; u.code.textContent = c ? spaced(c) : 'Tap Next for a code'; u.code.dataset.code = c; u.next.textContent = 'Counter ' + (e.counter || 0); continue; }
+    const hid = isHidden(e); card.classList.toggle('masked', hid);
+    if (e.type === 'hotp') { const c = e.lastCode || ''; u.code.textContent = c ? (hid ? '••• •••' : spaced(c)) : 'Tap Next for a code'; u.code.dataset.code = c; u.next.textContent = 'Counter ' + (e.counter || 0); continue; }
     const period = e.period || 30, left = period - (now % period), ctr = Math.floor(now / period);
-    if (force || u.ctr !== ctr) {
-      u.ctr = ctr;
-      const c = await codeFor(e, Math.floor(now)); u.code.textContent = c ? spaced(c) : '------'; u.code.dataset.code = c || '';
-      if (s.showNext) { const n = await codeFor(e, Math.floor(now) + period); u.next.textContent = n ? 'Next ' + spaced(n) : ''; } else u.next.textContent = '';
+    if (force || u.ctr !== ctr || u.hid !== hid) {
+      u.ctr = ctr; u.hid = hid;
+      const c = await codeFor(e, Math.floor(now)); u.code.dataset.code = c || '';
+      u.code.textContent = hid ? (c && c.length === 5 ? '•••••' : '••• •••') : c ? spaced(c) : '------';
+      if (s.showNext && !hid) { const n = await codeFor(e, Math.floor(now) + period); u.next.textContent = n ? 'Next ' + spaced(n) : ''; } else u.next.textContent = hid ? 'Tap to show' : '';
     }
     u.code.classList.toggle('soon', left <= 5);
     u.fg.setAttribute('stroke-dashoffset', String(87.96 * (1 - left / period)));
@@ -193,7 +223,32 @@ async function copyCode(e, c) {
   try { await navigator.clipboard.writeText(c); toast('Copied ' + (e.issuer || e.label) + ' code'); } catch (x) { toast('Couldn\'t copy - the code is ' + spaced(c)); }
 }
 async function hotpNext(e) { e.counter = (e.counter || 0) + 1; e.lastCode = await codeFor(Object.assign({}, e, { counter: e.counter - 1 }), 0); await saveAll(); renderList(); }
-async function saveAll() { await vault.save(); pushMirror(false); }
+async function saveAll() { await vault.save(); pushMirror(false); maybeAutoBackup(false); }
+
+// ---- 1.1: automatic backup to the PC (opt-in; switched on after your first backup): when something isn't in the latest backup and the
+// PC is reachable, the already-encrypted vault goes to Hallow Remote - at most once a day. Remote keeps the last 10, unopened.
+let autoBusy = false;
+async function autoBackupText() {
+  if (cfg.autoMode !== 'passcode' && vault.data.backupKey) return makeBackupWithKey(vault.data.entries, vault.data.backupKey);
+  return vault.passcodeBackup();
+}
+async function maybeAutoBackup(force) {
+  if (autoBusy || !vault.unlocked) return null;
+  const now = Date.now(), a = vault.data.auto || {};
+  if (!force && (!autoBackupDue(vault.data, cfg, now) || (a.lastTry && now - Date.parse(a.lastTry) < 10 * 60000))) return null;
+  autoBusy = true;
+  try {
+    const sent = vault.data.entries.map(e => Object.assign({}, e));
+    const text = await autoBackupText(), r = await post('api/autobackup', text, true);
+    vault.data.auto = { last: new Date().toISOString(), lastTry: new Date().toISOString(), state: 'ok', name: r.name, mode: backupKind(text) };
+    markBackedUp(vault.data, 'auto', Date.now(), sent);
+    await vault.save(); if (!$('v_main').classList.contains('hidden')) renderBackupBar();
+    return r.name;
+  } catch (x) {
+    if (vault.unlocked) { vault.data.auto = Object.assign({}, a, { lastTry: new Date().toISOString(), state: 'error', msg: /Not found/.test(x.message) ? 'Update Hallow Remote on your PC (1.21 or newer keeps automatic backups)' : x.message }); try { await vault.save(); } catch (y) { } }
+    if (force) throw x; return null;
+  } finally { autoBusy = false; }
+}
 
 // ---- sheets
 let backFn = null;
@@ -390,11 +445,17 @@ function editSheet(e) {
     if (!armed) { armed = true; del.textContent = 'Tap again to delete (turn off 2FA on the site first, or you may be locked out)'; return; }
     vault.data.entries = vault.data.entries.filter(x => x !== e); await saveAll(); toast('Deleted'); show('v_main'); renderList();
   } });
+  // 1.1: the site's own backup / recovery codes and notes, encrypted with the rest (hidden until you ask)
+  const notes = h('textarea', { cls: 'in', id: 'e_notes', placeholder: 'This site\'s backup / recovery codes, or a note (kept encrypted on this phone, and in your backups)', spellcheck: 'false', maxlength: '4000' }); notes.value = e.notes || '';
+  const notesBox = h('div', { cls: 'hidden', id: 'e_notesbox' }, notes, h('p', { cls: 'sub small', text: 'Most sites give you a few one-time backup codes when you turn on 2FA - keep them here so a lost phone isn\'t a locked account. They go into your backups and the Aegis export, never to the PC mirror.' }));
+  const qrBox = h('div', { cls: 'hidden', id: 'e_qrbox' });
   s.append(h('div', { cls: 'card' }, h('label', { cls: 'f', text: 'Site or app' }), iss, h('label', { cls: 'f', text: 'Account' }), lab,
     h('div', { cls: 'kv' }, h('span', { text: 'Kind' }), e.type === 'steam' ? 'Steam Guard' : e.type.toUpperCase() + ', ' + e.algo + ', ' + e.digits + ' digits' + (e.type === 'totp' ? ', ' + e.period + ' s' : '')),
     h('div', { cls: 'kv' }, h('span', { text: 'Added' }), new Date(e.added || Date.now()).toLocaleDateString()),
-    h('button', { cls: 'btn go wide', id: 'e_save', text: 'Save', onclick: async () => { e.issuer = iss.value.trim().slice(0, 80); e.label = lab.value.trim().slice(0, 120); if (!e.issuer && !e.label) e.label = 'Account'; await saveAll(); toast('Saved'); show('v_main'); renderList(); } })),
-    h('div', { cls: 'card' }, h('button', { cls: 'btn wide', text: 'Show the setup key', onclick: () => { keyBox.classList.toggle('hidden'); } }), keyBox), del);
+    h('button', { cls: 'btn wide', id: 'e_notesbtn', text: e.notes ? 'Show backup codes / notes' : 'Add backup codes / notes', onclick: ev => { notesBox.classList.remove('hidden'); ev.target.classList.add('hidden'); notes.focus(); } }), notesBox,
+    h('button', { cls: 'btn go wide', id: 'e_save', text: 'Save', onclick: async () => { e.issuer = iss.value.trim().slice(0, 80); e.label = lab.value.trim().slice(0, 120); if (!e.issuer && !e.label) e.label = 'Account'; const nv = notes.value.slice(0, 4000); if (nv.trim()) e.notes = nv; else delete e.notes; await saveAll(); toast('Saved'); show('v_main'); renderList(); } })),
+    h('div', { cls: 'card' }, h('button', { cls: 'btn wide', id: 'e_qr', text: 'Show a QR code to move it to another app', onclick: () => { qrBox.classList.toggle('hidden'); if (!qrBox.firstChild) qrBox.append(h('p', { cls: 'sub small warn', text: 'Anyone who scans or photographs this can make your codes. Scan it with the other app now, check it shows the same code, then hide it.' }), h('div', { cls: 'qrwrap', id: 'e_qrcode' }, qrSvg(toOtpauth(e), 'M'))); } }), qrBox,
+      h('button', { cls: 'btn wide', text: 'Show the setup key', onclick: () => { keyBox.classList.toggle('hidden'); } }), keyBox), del);
   keyBox.append(h('p', { cls: 'sub small warn', text: 'Anyone who sees this can make your codes. Only use it to add the account to another authenticator.' }), h('p', { cls: 'mono', text: e.secret }), h('p', { cls: 'mono small sub', text: toOtpauth(e) }));
 }
 
@@ -404,9 +465,18 @@ async function settingsSheet() {
   const mins = h('select', { cls: 'in', id: 's_lockmin' }, [1, 2, 5, 10, 30].map(n => h('option', { value: n, text: n + (n === 1 ? ' minute' : ' minutes'), selected: n === st.lockMinutes })));
   mins.addEventListener('change', async () => { const v = await vault.setSettings({ lockMinutes: +mins.value }); locker.set(v.lockMinutes, v.lockHidden); });
   const hid = h('input', { type: 'checkbox', id: 's_hidden', checked: st.lockHidden }); hid.addEventListener('change', async () => { const v = await vault.setSettings({ lockHidden: hid.checked }); locker.set(v.lockMinutes, v.lockHidden); });
-  const nxt = h('input', { type: 'checkbox', id: 's_next', checked: st.showNext }); nxt.addEventListener('change', async () => { await vault.setSettings({ showNext: nxt.checked }); });
-  s.append(h('h3', { text: 'Locking' }), h('div', { cls: 'card' }, h('label', { cls: 'f', text: 'Lock after this long without use' }), mins,
-    h('label', { cls: 'sw' }, h('span', { text: 'Lock as soon as I switch away from the app' }), hid), h('label', { cls: 'sw' }, h('span', { text: 'Show the next code' }), nxt)));
+  const nxt = h('input', { type: 'checkbox', id: 's_next', checked: st.showNext }); nxt.addEventListener('change', async () => { cfg = await vault.setSettings({ showNext: nxt.checked }); });
+  const hideC = h('input', { type: 'checkbox', id: 's_hidecodes', checked: !!st.hideCodes }); hideC.addEventListener('change', async () => { cfg = await vault.setSettings({ hideCodes: hideC.checked }); revealed.clear(); });
+  s.append(h('h3', { text: 'Locking and privacy' }), h('div', { cls: 'card' }, h('label', { cls: 'f', text: 'Lock after this long without use' }), mins,
+    h('label', { cls: 'sw' }, h('span', { text: 'Lock as soon as I switch away from the app' }), hid), h('label', { cls: 'sw' }, h('span', { text: 'Show the next code' }), nxt),
+    h('label', { cls: 'sw' }, h('span', {}, h('span', { text: 'Hide codes until tapped' }), h('br'), h('span', { cls: 'sub small', text: 'For a screen others can see: a tap shows the code for 20 seconds (and copies it).' })), hideC)));
+  // 1.1: storage that the browser doesn't clear by itself
+  await askPersist();
+  s.append(h('h3', { text: 'Storage on this phone' }), h('div', { cls: 'card', id: 's_storage' },
+    h('div', { cls: 'kv' }, h('span', { text: 'Protected from automatic clearing' }), h('b', { id: 's_persist', cls: storageState.persisted ? 'good' : 'warn', text: !storageState.supported ? 'not supported here' : storageState.persisted ? 'yes' : 'no' })),
+    h('p', { cls: 'sub small', text: storageState.persisted ? 'The browser has promised not to clear this app\'s data on its own, for example when the phone runs low on space.' : 'The browser hasn\'t promised to keep this app\'s data yet - it may clear it when the phone runs low on space. Installing the app (Add to Home screen) and using it often usually makes it say yes; the app asks again each time it starts.' }),
+    h('p', { cls: 'sub small warn', text: 'Even when protected: Chrome\'s "Clear browsing data" (cookies and site data) for this site, clearing Chrome\'s storage in Android settings, uninstalling the app or resetting the phone still wipes your accounts. Keep a backup.' }),
+    storageState.persisted || !storageState.supported ? null : h('button', { cls: 'btn wide', id: 's_persistask', text: 'Ask the browser again', onclick: async () => { await askPersist(); toast(storageState.persisted ? 'Protected from automatic clearing' : 'The browser said not yet - it decides by itself'); settingsSheet(); } })));
   // fingerprint
   const bio = h('div', { cls: 'card', id: 's_bio' });
   if (m.prf) bio.append(h('p', { text: 'Fingerprint / face unlock is on.' }), h('button', { cls: 'btn wide', text: 'Turn it off', onclick: async () => { await vault.clearPrf(); toast('Fingerprint unlock is off'); settingsSheet(); } }));
@@ -415,12 +485,32 @@ async function settingsSheet() {
   else bio.append(h('p', { cls: 'sub small', text: 'Fingerprint / face unlock needs a phone browser with passkeys and the PRF extension (Chrome on Android, Safari on iOS 18+). Your passcode works everywhere.' }));
   s.append(h('h3', { text: 'Fingerprint / face' }), bio);
   // backups
-  s.append(h('h3', { text: 'Backup' }), h('div', { cls: 'card' },
-    h('p', { cls: 'sub small', text: 'An encrypted file with all your accounts, locked with a backup password you choose each time (not your passcode). Keep it somewhere safe - with it, a new phone gets everything back.' }),
+  const bst = backupStatus(vault.data, Date.now()), au = vault.data.auto || {};
+  s.append(h('h3', { text: 'Backup' }), h('div', { cls: 'card', id: 's_backupcard' },
+    h('div', { cls: 'kv' }, h('span', { text: 'Latest backup' }), h('b', { id: 's_lastbackup', cls: bst.never ? 'warn' : bst.stale ? 'warn' : '', text: bst.never ? 'none yet' : new Date(bst.at).toLocaleString() + ' (' + ({ file: 'file', pc: 'PC', auto: 'automatic, PC' }[bst.kind] || bst.kind) + ')' })),
+    bst.never ? null : h('div', { cls: 'kv' }, h('span', { text: 'Not in it' }), h('span', { id: 's_notin', text: bst.notIn ? bst.notIn + (bst.notIn === 1 ? ' account' : ' accounts') : 'nothing - all backed up' })),
+    h('p', { cls: 'sub small', text: 'An encrypted file with all your accounts (and their backup codes / notes), locked with a backup password you choose (not your passcode). Keep it somewhere safe - with it, a new phone gets everything back.' }),
     h('button', { cls: 'btn go wide', id: 's_backup', text: 'Save a backup file', onclick: () => backupSheet(false) }),
     h('button', { cls: 'btn wide', id: 's_backuppc', text: 'Back up to my PC', onclick: () => backupSheet(true) }),
     h('button', { cls: 'btn wide', id: 's_restore', text: 'Restore a backup', onclick: () => restoreSheet() }),
     h('p', { cls: 'sub small', text: 'On the PC the file stays encrypted (Hallow Remote can\'t open it) in %APPDATA%\\HallowAuthenticator\\backups - copy it to your NAS if you like.' })));
+  // 1.1: automatic backup to the PC
+  const autoOn = h('input', { type: 'checkbox', id: 's_auto', checked: st.autoBackup === true });
+  autoOn.addEventListener('change', async () => { cfg = await vault.setSettings({ autoBackup: autoOn.checked }); toast(autoOn.checked ? 'Automatic backup to your PC is on' : 'Automatic backup is off'); if (autoOn.checked) maybeAutoBackup(false); });
+  const mode = h('select', { cls: 'in', id: 's_automode' }, h('option', { value: 'backup', text: 'My backup password (from my latest backup)', selected: st.autoMode !== 'passcode', disabled: !vault.data.backupKey }), h('option', { value: 'passcode', text: 'My Authenticator passcode', selected: st.autoMode === 'passcode' || !vault.data.backupKey }));
+  mode.addEventListener('change', async () => { cfg = await vault.setSettings({ autoMode: mode.value }); });
+  s.append(h('h3', { text: 'Automatic backup to my PC' }), h('div', { cls: 'card', id: 's_autocard' },
+    h('label', { cls: 'sw' }, h('span', { text: 'Back up to my PC by itself' }), autoOn),
+    h('p', { cls: 'sub small', text: 'After you add or change accounts, when your PC is reachable (Hallow Remote and Tailscale on), the app sends its already-encrypted accounts to Hallow Remote - at most once a day. The PC keeps the last 10 and can\'t open them. ' + (st.autoBackup === null ? 'It switches on by itself after your first backup.' : '') }),
+    h('label', { cls: 'f', text: 'Locked with' }), mode,
+    h('p', { cls: 'sub small', text: 'Restoring needs that password - or, for the passcode, the passcode this phone had when the backup was made.' }),
+    h('div', { cls: 'kv' }, h('span', { text: 'Last automatic backup' }), h('span', { id: 's_lastauto', text: au.last ? new Date(au.last).toLocaleString() : 'not yet' })),
+    au.state === 'error' ? h('p', { cls: 'sub small warn', id: 's_autoerr', text: 'Last try didn\'t reach the PC: ' + (au.msg || '') }) : null,
+    h('button', { cls: 'btn wide', id: 's_autonow', text: 'Send one to my PC now', onclick: async ev => { ev.target.disabled = true; try { const n = await maybeAutoBackup(true); toast('Saved on your PC: ' + n); } catch (x) { toast(x.message, 4500); } settingsSheet(); } })));
+  // 1.1: never locked in
+  s.append(h('h3', { text: 'Move to another app' }), h('div', { cls: 'card' },
+    h('p', { cls: 'sub small', text: 'Your accounts are yours: export them for Aegis, 2FAS, Google Authenticator or any app that reads otpauth:// links. To move a single account, open it (⋯) and show its QR code.' }),
+    h('button', { cls: 'btn wide', id: 's_export', text: 'Export / move my accounts', onclick: exportSheet })));
   // mirror
   s.append(h('h3', { text: 'PC mirror (off unless you turn it on)' }), mirrorCard());
   // passcode, help, erase
@@ -460,8 +550,16 @@ function eraseSheet() {
   s.append(h('div', { cls: 'card' }, h('p', { text: 'This deletes every account from this phone. Without a backup you will need to set up 2FA again on every site (or use their recovery codes).' }), inp,
     h('button', { cls: 'btn danger wide', id: 'erase_go', text: 'Erase', onclick: async () => { if (inp.value !== 'ERASE') { toast('Type ERASE first'); return; } await vault.erase(); locker.disarm(); showLock(''); } })));
 }
-function backupSheet(toPc) {
-  const s = sheet(toPc ? 'Back up to my PC' : 'Save a backup file', settingsSheet);
+// 1.1: a file to keep (share sheet on phones, a download elsewhere). The developer tests set hallowAuth.testFiles to catch it instead.
+async function saveFile(name, text, type) {
+  if (Array.isArray(window.hallowAuth.testFiles)) { window.hallowAuth.testFiles.push({ name, text }); return; }
+  const file = new File([text], name, { type: type || 'application/json' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); return; } catch (x) { if (x.name === 'AbortError') throw x; } }
+  const u = URL.createObjectURL(file); const l = h('a', { href: u, download: name }); document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 10000);
+}
+function backupSheet(toPc, backTo) {
+  const s = sheet(toPc ? 'Back up to my PC' : 'Save a backup file', backTo || settingsSheet);
+  if (backTo) s.append(h('div', { cls: 'row' }, h('button', { cls: 'btn', id: 'bk_topc', text: toPc ? 'Save a file instead' : 'Send to my PC instead', onclick: () => backupSheet(!toPc, backTo) })));
   const a = h('input', { cls: 'in', type: 'password', id: 'bk_pw1', placeholder: 'Backup password', autocomplete: 'new-password' }), b = h('input', { cls: 'in', type: 'password', id: 'bk_pw2', placeholder: 'The same again', autocomplete: 'new-password' });
   const st = h('div', { cls: 'sub small' });
   s.append(h('div', { cls: 'card' }, h('p', { cls: 'sub small', text: 'Choose a strong backup password and write it down somewhere safe - nobody can open the backup without it, including you.' }), a, b, st,
@@ -469,21 +567,26 @@ function backupSheet(toPc) {
       if (a.value.length < 8) { st.textContent = 'Use at least 8 characters.'; return; } if (a.value !== b.value) { st.textContent = 'They don\'t match.'; return; }
       ev.target.disabled = true; st.textContent = 'Encrypting...';
       try {
-        const text = await makeBackup(vault.data, a.value); a.value = b.value = '';
-        if (toPc) { const r = await post('api/backup', text, true); st.textContent = 'Saved on your PC as ' + r.name + ' (encrypted).'; }
+        const bk = await backupKeyFrom(a.value), sent = vault.data.entries.map(e => Object.assign({}, e)), text = await makeBackupWithKey(sent, bk); a.value = b.value = '';
+        let done;
+        if (toPc) { const r = await post('api/backup', text, true); done = 'Saved on your PC as ' + r.name + ' (encrypted).'; }
         else {
-          const name = 'hallow-authenticator-' + new Date().toISOString().slice(0, 10) + '.hallowauth', file = new File([text], name, { type: 'application/json' });
-          if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: name }); } catch (x) { if (x.name !== 'AbortError') throw x; } }
-          else { const u = URL.createObjectURL(file); const l = h('a', { href: u, download: name }); document.body.append(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 10000); }
-          st.textContent = 'Backup ready: ' + name + '. Keep it off this phone too (your PC, a NAS, cloud storage).';
+          const name = 'hallow-authenticator-' + new Date().toISOString().slice(0, 10) + '.hallowauth';
+          await saveFile(name, text);
+          done = 'Backup ready: ' + name + '. Keep it off this phone too (your PC, a NAS, cloud storage).';
         }
-      } catch (x) { st.textContent = x.message; }
+        // 1.1: remember what's in it (for the reminders) and the key from this password (for automatic backups) - inside the vault
+        markBackedUp(vault.data, toPc ? 'pc' : 'file', Date.now(), sent); vault.data.backupKey = bk;
+        if (cfg.autoBackup === null) { cfg = await vault.setSettings({ autoBackup: true }); done += ' Automatic backup to your PC is now on (Settings) - it uses this backup password.'; }
+        await vault.save(); st.textContent = done;
+      } catch (x) { st.textContent = x.name === 'AbortError' ? 'Cancelled - nothing was saved.' : x.message; }
       ev.target.disabled = false;
     } })));
 }
 async function restoreText(text) {
-  const pw = await askPassword('The backup password:'); if (pw == null) return;
-  try { const entries = await readBackup(text, pw); confirmSheet('Restore', entries, []); } catch (x) { toast(x.message, 4000); restoreSheet(); }
+  const kind = backupKind(text);
+  const pw = await askPassword(kind === 'passcode' ? 'This automatic backup is locked with the Authenticator passcode this phone had when it was made. That passcode:' : 'The backup password:'); if (pw == null) return;
+  try { const entries = await readAnyBackup(text, pw); confirmSheet('Restore', entries, []); } catch (x) { toast(x.message, 4000); restoreSheet(); }
 }
 async function restoreSheet() {
   const s = sheet('Restore a backup', () => addSheet());
@@ -497,7 +600,59 @@ async function restoreSheet() {
     const r = await (await fetch('api/backups', { cache: 'no-store' })).json(); pcList.textContent = '';
     if (!r.items || !r.items.length) pcList.textContent = 'None yet.';
     for (const it of r.items || []) pcList.append(h('button', { cls: 'btn wide', text: it.made + ' (' + Math.max(1, Math.round(it.size / 1024)) + ' KB)', onclick: async () => { const t = await (await fetch('api/backups/' + encodeURIComponent(it.name), { cache: 'no-store' })).text(); restoreText(t); } }));
-  } catch (x) { pcList.textContent = 'Your PC isn\'t reachable right now.'; }
+    // 1.1: the automatic ones (Hallow Remote 1.21+)
+    const ra = await fetch('api/autobackups', { cache: 'no-store' }); const ja = ra.ok ? await ra.json() : null;
+    if (ja && ja.items && ja.items.length) {
+      pcList.append(h('p', { cls: 'sub small', text: 'Automatic backups (newest first):' }));
+      for (const it of ja.items) pcList.append(h('button', { cls: 'btn wide auto', text: 'Automatic - ' + it.made + ' (' + Math.max(1, Math.round(it.size / 1024)) + ' KB)', onclick: async () => { const t = await (await fetch('api/autobackups/' + encodeURIComponent(it.name), { cache: 'no-store' })).text(); restoreText(t); } }));
+    }
+  } catch (x) { if (!pcList.querySelector('button')) pcList.textContent = 'Your PC isn\'t reachable right now.'; }
+}
+
+// ---- 1.1: the escape hatch - export to standard formats so you can always move to another app
+function exportSheet() {
+  const s = sheet('Move to another app', settingsSheet), list = vault.data.entries, today = new Date().toISOString().slice(0, 10);
+  const pass = (id) => h('input', { cls: 'in', type: 'password', id, placeholder: 'Your Authenticator passcode', autocomplete: 'current-password' });
+  const confirmPass = async (inp, st) => { if (!inp.value) { st.textContent = 'Type your passcode first.'; return false; } st.textContent = 'Checking...'; const ok = await vault.checkPasscode(inp.value); inp.value = ''; st.textContent = ok ? '' : 'Wrong passcode.'; return ok; };
+  // Aegis
+  const a1 = h('input', { cls: 'in', type: 'password', id: 'x_apw1', placeholder: 'A password for the export file', autocomplete: 'new-password' }), a2 = h('input', { cls: 'in', type: 'password', id: 'x_apw2', placeholder: 'The same again', autocomplete: 'new-password' }), ast = h('div', { cls: 'sub small', id: 'x_ast' });
+  s.append(h('h3', { text: 'Encrypted file for Aegis and others' }), h('div', { cls: 'card' },
+    h('p', { cls: 'sub small', text: 'An Aegis vault file (encrypted with a password you choose: scrypt + AES-256-GCM). Aegis imports it directly; 2FAS, Ente Auth, Proton Pass and Bitwarden Authenticator import Aegis files too. Backup codes / notes go in as Aegis notes.' }),
+    a1, a2, ast, h('button', { cls: 'btn go wide', id: 'x_aegis', text: 'Make the Aegis file (' + list.length + (list.length === 1 ? ' account)' : ' accounts)'), onclick: async ev => {
+      if (a1.value.length < 8) { ast.textContent = 'Use at least 8 characters.'; return; } if (a1.value !== a2.value) { ast.textContent = 'They don\'t match.'; return; }
+      ev.target.disabled = true; ast.textContent = 'Encrypting (a few seconds)...';
+      try { const text = await aegisExport(list, a1.value, window.hallowAuth.testAegisN || 32768); a1.value = a2.value = ''; const name = 'aegis-export-hallow-' + today + '.json'; await saveFile(name, text); ast.textContent = 'Ready: ' + name + '. In Aegis: Settings > Import & Export > Import from file > Aegis. Delete the file when you\'re done.'; }
+      catch (x) { ast.textContent = x.name === 'AbortError' ? 'Cancelled.' : x.message; }
+      ev.target.disabled = false;
+    } })));
+  // Google Authenticator transfer QR codes
+  const gp = pass('x_gpass'), gst = h('div', { cls: 'sub small', id: 'x_gst' }), gbox = h('div', { id: 'x_gbox' });
+  const gcount = list.filter(googleCan).length;
+  s.append(h('h3', { text: 'Transfer QR codes (Google Authenticator style)' }), h('div', { cls: 'card' },
+    h('p', { cls: 'sub small', text: 'The same kind of codes Google Authenticator\'s "Transfer accounts" shows. Scan them with Google Authenticator, Aegis, 2FAS or another phone running Hallow Authenticator (Microsoft Authenticator can\'t import them). ' + gcount + ' of ' + list.length + ' accounts fit (Google\'s format has no Steam Guard and only 30-second codes).' }),
+    h('p', { cls: 'sub small warn', text: 'Anyone who scans or photographs these codes gets all those accounts. Show them only to your own phone, somewhere private.' }),
+    gp, gst, h('button', { cls: 'btn wide', id: 'x_google', text: 'Show the transfer QR codes', onclick: async () => {
+      if (!(await confirmPass(gp, gst))) return;
+      const g = googleMigration(list); gbox.textContent = ''; let i = 0;
+      if (!g.uris.length) { gst.textContent = 'None of your accounts fit Google\'s format.'; return; }
+      const qr = h('div', { cls: 'qrwrap', id: 'x_gqr' }), cap = h('p', { cls: 'sub', id: 'x_gcap' });
+      const draw = () => { qr.textContent = ''; qr.append(qrSvg(g.uris[i], 'M')); cap.textContent = 'Code ' + (i + 1) + ' of ' + g.uris.length + (g.skipped.length ? ' - not included: ' + g.skipped.join(', ') : ''); };
+      gbox.append(qr, cap, h('div', { cls: 'row' }, h('button', { cls: 'btn', id: 'x_gprev', text: 'Previous', onclick: () => { if (i > 0) { i--; draw(); } } }), h('button', { cls: 'btn go', id: 'x_gnext', text: 'Next', onclick: () => { if (i < g.uris.length - 1) { i++; draw(); } } })),
+        h('button', { cls: 'btn wide', text: 'Hide the codes', onclick: () => { gbox.textContent = ''; } }));
+      draw();
+    } }), gbox));
+  // plain otpauth list
+  const pp = pass('x_ppass'), pst = h('div', { cls: 'sub small', id: 'x_pst' }), pbox = h('div', { id: 'x_pbox' });
+  s.append(h('h3', { text: 'Plain list of otpauth:// links' }), h('div', { cls: 'card warnc' },
+    h('p', { cls: 'warn', text: 'NOT encrypted. Everyone and every app that can read this file or text can make all your 2FA codes - and with your passwords, sign in as you.' }),
+    h('p', { cls: 'sub small', text: 'Only for an app that imports nothing else. Don\'t email it, don\'t put it in cloud storage or a chat, and delete it as soon as the other app has imported it. The encrypted Aegis file above is almost always the better choice.' }),
+    pp, pst, h('button', { cls: 'btn danger wide', id: 'x_plain', text: 'I understand - make the plain list', onclick: async () => {
+      if (!(await confirmPass(pp, pst))) return;
+      const text = otpauthList(list); pbox.textContent = '';
+      const ta = h('textarea', { cls: 'in', id: 'x_plaintext', readonly: true, spellcheck: 'false' }); ta.value = text;
+      pbox.append(ta, h('div', { cls: 'row' }, h('button', { cls: 'btn', id: 'x_plainsave', text: 'Save as a text file', onclick: async () => { try { await saveFile('otpauth-links-' + today + '.txt', text, 'text/plain'); toast('Saved - delete it after the import'); } catch (x) { } } }),
+        h('button', { cls: 'btn', text: 'Hide it', onclick: () => { pbox.textContent = ''; } })));
+    } }), pbox));
 }
 
 // ---- PC mirror: a read-only, encrypted copy of the accounts you pick, for Hallow Keys on your PC (convenience over strength)
@@ -546,7 +701,7 @@ function steamHelp() {
 function offlineHelp() {
   page('What works offline', [
     h('p', { text: 'Once installed and opened once, the app and your accounts are on this phone: codes, copying, search, editing, scanning new QR codes and saving a backup file all work with the PC off, Tailscale off or no internet.' }),
-    h('p', { text: 'Needs your PC (Hallow Remote over Tailscale): backing up to the PC, restoring from the PC, receiving codes from Hallow Keys, the PC mirror, and app updates. Codes depend on the phone\'s clock - keep automatic time on.' })], settingsSheet);
+    h('p', { text: 'Needs your PC (Hallow Remote over Tailscale): backing up to the PC (by hand or automatically), restoring from the PC, receiving codes from Hallow Keys, the PC mirror, and app updates. Codes depend on the phone\'s clock - keep automatic time on.' })], settingsSheet);
 }
 
 // ---- start
@@ -565,7 +720,8 @@ async function start() {
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { scope: './' }).catch(() => { });
   if (!window.isSecureContext || !globalThis.crypto || !crypto.subtle) { show('v_lock'); $('lockbody').append(h('div', { cls: 'card' }, h('p', { text: 'Hallow Authenticator needs a secure (https) link. Turn on HTTPS in Hallow Remote on your PC, then open the https link.' }))); return; }
   connect();
+  if (await vault.exists()) askPersist();   // 1.1: every start until the browser says yes (a new phone asks at setup)
   await showLock();
 }
-window.hallowAuth = { vault, version: VERSION, decodeImage };   // for the developer tests in a test browser (no secrets: the vault object is the same one the page uses)
+window.hallowAuth = { vault, version: VERSION, decodeImage, storage: storageState, refresh: () => { if (vault.unlocked) renderList(); }, autoBackup: maybeAutoBackup };   // for the developer tests in a test browser (no secrets: the vault object is the same one the page uses)
 start();

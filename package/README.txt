@@ -7,6 +7,14 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.21
+- Automatic backups for Hallow Authenticator 1.1: after you add or change accounts the phone app sends its accounts -
+  already encrypted on the phone - to this PC by itself, at most once a day (it switches on after your first backup).
+  Remote keeps the newest 10, unopened, in %APPDATA%\HallowAuthenticator\autobackups (your own backups stay in
+  ...\backups and are never touched), and the phone lists them when you restore. Hallow Authenticator 1.1 also asks the
+  browser to protect its storage, reminds you to back up, exports to Aegis / transfer QR codes / otpauth lists, can hide
+  codes until tapped and keeps each site's backup codes with its account. Open the app on your phone once to update it.
+
 WHAT'S NEW IN 1.20
 - Catches up with the newer apps. Hallow VPN 1.2.6: the phone hides buttons that would make Windows ask (UAC) and says why,
   shows whether Windows has your Nord login, and a connect from the phone no longer changes the server you picked on the PC.
@@ -20,7 +28,7 @@ WHAT'S NEW IN 1.19
 - Hallow Authenticator: your 2FA codes on your phone, a replacement for Microsoft Authenticator. On the phone's Home tab
   tap Authenticator (needs HTTPS - see below), install it, and add your accounts. The codes stay on the phone, encrypted,
   and work with the PC off. Remote only keeps encrypted backups the phone sends (it can't open them) in
-  %APPDATA%HallowAuthenticatorackups - copy them to your NAS if you like - and carries Hallow Keys 2.11's one-time,
+  %APPDATA%\HallowAuthenticator\backups - copy them to your NAS if you like - and carries Hallow Keys 2.11's one-time,
   end-to-end sealed transfer of your 2FA codes to the phone.
 - A smaller, tidier PC window: the code, link, an on / off switch and whether your phone is connected on top; the rest
   (permissions, apps, files, advanced settings, help) in sections you open. It remembers the size you give it.

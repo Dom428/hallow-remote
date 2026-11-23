@@ -49,3 +49,11 @@ label.f{display:block;margin:12px 2px 4px;color:var(--muted);font-size:14px}
 #toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 18px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%;box-shadow:0 8px 24px var(--shadow);z-index:9}
 #toast.show{opacity:1}
 .banner{border:1px solid var(--warn);border-radius:14px;padding:10px 12px;margin-bottom:10px;font-size:14px}
+/* 1.1: backup reminders, QR codes, hidden codes, per-account notes */
+.banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.banner .btn{min-height:40px;padding:8px 14px}
+.banner.warnb{border-color:var(--warn);background:var(--panel)}.banner.soft{border-color:var(--line)}
+.qrwrap{display:flex;justify-content:center;margin:10px 0}.qrwrap svg{width:min(78vw,300px);height:auto;border-radius:8px;background:#fff}
+.acc.masked .code{letter-spacing:3px;color:var(--muted)}
+.notesmark{font-size:12px}
+.card.warnc{border-color:var(--warn)}
+#x_plaintext{min-height:140px}

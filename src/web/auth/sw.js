@@ -1,8 +1,8 @@
 // Hallow Authenticator - the service worker: the app's own files are kept on the phone, so it opens with the PC off or no internet.
 // Cache first (fast, and no waiting on a PC that's asleep); a new version of this file brings new files. api/ is never cached.
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const CACHE = 'hallow-auth-' + VERSION;
-const FILES = ['./', 'index.html', 'app.css', 'app.js', 'otp.js', 'vault.js', 'qr.js', 'importers.js', 'scrypt.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-mask-512.png', 'apple-touch-icon.png'];
+const FILES = ['./', 'index.html', 'app.css', 'app.js', 'otp.js', 'vault.js', 'qr.js', 'importers.js', 'scrypt.js', 'exporters.js', 'qrcode.js', 'manifest.json', 'icon-192.png', 'icon-512.png', 'icon-mask-512.png', 'apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('hallow-auth-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

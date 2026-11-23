@@ -51,6 +51,7 @@ function aegisEntries(db) {
     const i = a.info || {}, t = String(a.type || '').toLowerCase();
     if (!['totp', 'hotp', 'steam'].includes(t)) { skipped.push((a.issuer || a.name || '?') + ' (' + t + ' codes aren\'t supported)'); continue; }
     const e = { type: t, issuer: a.issuer || '', label: a.name || '', secret: i.secret || '', algo: i.algo || 'SHA1', digits: i.digits || 6, period: i.period || 30, counter: i.counter || 0, fav: !!a.favorite, source: 'aegis' };
+    if (a.note) e.notes = String(a.note).slice(0, 4000);   // 1.1: Aegis' note (this app's per-account notes)
     const err = normalize(e); if (err) skipped.push((e.issuer || e.label) + ' (' + err + ')'); else entries.push(e);
   }
   return { entries, skipped };
@@ -107,7 +108,7 @@ export async function parseAny(text, password) {
     let j; try { j = JSON.parse(t); } catch (x) { throw new Error('That file isn\'t valid JSON'); }
     if (isAegis(j)) { if (aegisEncrypted(j) && password == null) return { kind: 'aegis', needsPassword: true }; const r = await parseAegis(j, password); return { kind: 'aegis', entries: r.entries, skipped: r.skipped }; }
     if (is2fas(j)) { if (j.servicesEncrypted && !(j.services && j.services.length) && password == null) return { kind: '2fas', needsPassword: true }; const r = await parse2fas(j, password); return { kind: '2fas', entries: r.entries, skipped: r.skipped }; }
-    if (j.format === 'hallow-authenticator-backup') return { kind: 'backup' };
+    if (j.format === 'hallow-authenticator-backup' || j.format === 'hallow-authenticator-vault') return { kind: 'backup' };   // 1.1: also the automatic backups locked by the passcode
     throw new Error('That JSON isn\'t an export this app knows (Aegis, 2FAS or a Hallow Authenticator backup)');
   }
   if (/otpauth:\/\//i.test(t)) { const r = parseOtpauthList(t); return { kind: 'links', entries: r.entries, skipped: r.errors }; }

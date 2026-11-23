@@ -112,6 +112,15 @@ export class Vault {
     m.prf = { credId: bytesToB64(credId), salt: bytesToB64(prfSalt), wrap: await seal(await hkdfKey(prfOutput, 'HallowAuthPRF1'), this.dekRaw, 'HallowAuthDEK1') };
     await this.st.set('meta', m);
   }
+  // 1.1: is this the passcode? (asked again before showing every secret at once - the plain export and the transfer QR codes)
+  async checkPasscode(passcode) { const m = await this.meta(); try { await open(await passKey(passcode, b64ToBytes(m.salt), m.iter), m.wrap, 'HallowAuthDEK1'); return true; } catch (x) { return false; } }
+  // 1.1: an automatic backup locked by the passcode: the passcode's wrap of the data key (as stored on the phone) and the accounts sealed
+  // again with the data key. It opens only with the passcode the phone had when it was made.
+  async passcodeBackup() {
+    if (!this.dek) throw new Error('Locked');
+    const m = await this.meta(), box = await seal(this.dek, JSON.stringify({ app: 'Hallow Authenticator', v: 1, entries: this.data.entries }), VAULT_BACKUP_FORMAT);
+    return JSON.stringify({ format: VAULT_BACKUP_FORMAT, v: 1, kdf: m.kdf || 'PBKDF2-SHA256', iter: m.iter, salt: m.salt, wiv: m.wrap.iv, wct: m.wrap.ct, iv: box.iv, ct: box.ct, made: new Date().toISOString() });
+  }
   async clearPrf() { const m = await this.meta(); m.prf = null; await this.st.set('meta', m); }
   async settings() { const m = await this.meta(); return Object.assign(defaultSettings(), (m && m.settings) || {}); }
   async setSettings(s) { const m = await this.meta(); m.settings = Object.assign(defaultSettings(), m.settings || {}, s); await this.st.set('meta', m); return m.settings; }
@@ -120,7 +129,8 @@ export class Vault {
   // what's stored, for the tests: nothing readable may be in here
   async storedText() { return JSON.stringify([await this.st.get('meta'), await this.st.get('vault')]); }
 }
-export function defaultSettings() { return { lockMinutes: 2, lockHidden: true, showNext: true, sort: 'manual' }; }
+// 1.1: hideCodes; autoBackup null = not decided yet (switched on after the first backup); autoMode 'backup' (backup password) or 'passcode'
+export function defaultSettings() { return { lockMinutes: 2, lockHidden: true, showNext: true, sort: 'manual', hideCodes: false, autoBackup: null, autoMode: 'backup' }; }
 // a short wait after wrong passcodes (on top of PBKDF2's own cost): 5 free tries, then 30 s, 1 min, 2 min ... up to 15 min
 export function waitAfterFails(fails) { return fails < 5 ? 0 : Math.min(15 * 60, 30 * 2 ** (fails - 5)); }
 
@@ -137,6 +147,61 @@ export async function readBackup(text, password) {
   let plain; try { plain = await open(await passKey(password, b64ToBytes(f.salt), f.iter), f, BACKUP_FORMAT); } catch (x) { throw new WrongPasscode('Wrong backup password (or the file is damaged)'); }
   const d = JSON.parse(dec.decode(plain)); if (!Array.isArray(d.entries)) throw new Error('The backup has no accounts');
   return d.entries;
+}
+
+// ---- 1.1: backups that need no password typed: the key from a backup password is kept (inside the encrypted vault) after a backup,
+// so automatic backups can be locked with the same password - the same file format, so Restore opens them with that password.
+export async function backupKeyFrom(password, iterations = ITERATIONS) {
+  const salt = rand(16), base = await subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = new Uint8Array(await subtle.deriveBits({ name: 'PBKDF2', salt, iterations, hash: 'SHA-256' }, base, 256));
+  return { salt: bytesToB64(salt), iter: iterations, key: bytesToB64(bits) };
+}
+export async function makeBackupWithKey(entries, bk) {
+  const raw = b64ToBytes(bk.key), key = await rawAes(raw); raw.fill(0);
+  const box = await seal(key, JSON.stringify({ app: 'Hallow Authenticator', v: 1, entries }), BACKUP_FORMAT);
+  return JSON.stringify({ format: BACKUP_FORMAT, v: 1, kdf: 'PBKDF2-SHA256', iter: bk.iter, salt: bk.salt, iv: box.iv, ct: box.ct, made: new Date().toISOString() });
+}
+export const VAULT_BACKUP_FORMAT = 'hallow-authenticator-vault';
+export async function readVaultBackup(text, passcode) {
+  let f; try { f = JSON.parse(text); } catch (x) { throw new Error('That isn\'t a Hallow Authenticator backup'); }
+  if (!f || f.format !== VAULT_BACKUP_FORMAT || !f.salt || !f.wct || !f.ct) throw new Error('That isn\'t a Hallow Authenticator backup');
+  if (!(f.iter >= 100000 && f.iter <= 10000000)) throw new Error('This backup has odd settings - it may be damaged');
+  let raw; try { raw = await open(await passKey(passcode, b64ToBytes(f.salt), f.iter), { iv: f.wiv, ct: f.wct }, 'HallowAuthDEK1'); } catch (x) { throw new WrongPasscode('Wrong passcode for this backup (it needs the passcode the phone had when it was made)'); }
+  const dek = await rawAes(raw); raw.fill(0);
+  let plain; try { plain = await open(dek, f, VAULT_BACKUP_FORMAT); } catch (x) { throw new Error('The backup is damaged'); }
+  const d = JSON.parse(dec.decode(plain)); if (!Array.isArray(d.entries)) throw new Error('The backup has no accounts');
+  return d.entries;
+}
+// either kind: one locked by a backup password, or by the passcode
+export function backupKind(text) { try { const f = JSON.parse(text); return f && f.format === VAULT_BACKUP_FORMAT ? 'passcode' : f && f.format === BACKUP_FORMAT ? 'password' : null; } catch (x) { return null; } }
+export async function readAnyBackup(text, secret) { return backupKind(text) === 'passcode' ? readVaultBackup(text, secret) : readBackup(text, secret); }
+
+// ---- 1.1: what the latest backup holds (kept inside the encrypted vault): a short fingerprint per account, to say "N accounts not in
+// your latest backup" after you add or change some, and when it was made (a gentle reminder after 14 days).
+export function entryPrint(e) {
+  const s = JSON.stringify([e.type, e.issuer, e.label, e.secret, e.algo, e.digits, e.period, e.notes || '']);
+  let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  return h.toString(16).padStart(8, '0');
+}
+export function markBackedUp(data, kind, when, entries) {
+  const prints = {}; for (const e of entries || data.entries) prints[e.id] = entryPrint(e);
+  data.backup = { at: new Date(when || Date.now()).toISOString(), kind, prints };
+}
+export const STALE_DAYS = 14;
+export function backupStatus(data, now) {
+  const b = data && data.backup, n = ((data && data.entries) || []).length;
+  if (!b || !b.at) return { never: true, notIn: n, stale: false, days: null, at: null };
+  const notIn = data.entries.filter(e => b.prints[e.id] !== entryPrint(e)).length;
+  const days = Math.floor(((now || Date.now()) - Date.parse(b.at)) / 86400000);
+  return { never: false, notIn, stale: days > STALE_DAYS, days, at: b.at, kind: b.kind };
+}
+// automatic backup to the PC: only after changes (something not in the latest backup), at most once a day
+export const AUTO_GAP_MS = 24 * 3600 * 1000;
+export function autoBackupDue(data, settings, now) {
+  if (!settings || settings.autoBackup !== true || !data || !data.entries.length) return false;
+  const st = backupStatus(data, now); if (!st.never && st.notIn === 0) return false;
+  const last = data.auto && data.auto.last ? Date.parse(data.auto.last) : 0;
+  return (now || Date.now()) - last >= AUTO_GAP_MS;
 }
 
 // ---- auto-lock: after N idle minutes, and (optionally) as soon as the page is hidden. Clock and timers can be passed in (tests).

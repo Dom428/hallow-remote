@@ -254,6 +254,7 @@ namespace HallowRemote
                 case "gear:refresh": return TimeSpan.FromSeconds(10);   // v1.20 (Hallow Gear itself allows one every 30 s)
                 case "auth:backup": return TimeSpan.FromSeconds(10);   // v1.19
                 case "auth:mirror": return TimeSpan.FromSeconds(2);
+                case "auth:autobackup": return TimeSpan.FromSeconds(30);   // v1.21 (the phone sends at most one a day)
                 case "auth:xfer": return TimeSpan.Zero;   // counted in the 30 a minute only (the id is 128 random bits)
                 default: return TimeSpan.FromMilliseconds(300);
             }

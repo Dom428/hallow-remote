@@ -20,14 +20,14 @@ using WF = System.Windows.Forms;
 [assembly: AssemblyTitle("Hallow Remote")]
 [assembly: AssemblyProduct("Hallow Remote")]
 [assembly: AssemblyDescription("Your phone as a remote for the Hallow apps")]
-[assembly: AssemblyVersion("1.20.0.0")]
-[assembly: AssemblyFileVersion("1.20.0.0")]
+[assembly: AssemblyVersion("1.21.0.0")]
+[assembly: AssemblyFileVersion("1.21.0.0")]
 
 namespace HallowRemote
 {
     public static class Program
     {
-        public const string Version = "1.20";
+        public const string Version = "1.21";
         [STAThread]
         public static void Main(string[] args)
         {
@@ -336,7 +336,7 @@ namespace HallowRemote
             var help = Section(sp, "Help", null, false);
             help.Children.Add(Muted("Your phone gets Hallow Mixer's sliders and mic, your Hallow Hub games, Hallow Clips, Vault and Overlay, the Hallow Toolkit game session, the newer apps, Hallow Keys and Hallow Authenticator, your PC's stats, files both ways and sleep / shut down / lock."));
             help.Children.Add(Muted("Only someone with the link can use it - keep it to yourself, and press New link if it ever gets out. It works only on your home network or through your own Tailscale. The first time, Windows may ask whether Hallow Remote can use the network: allow it for private networks."));
-            help.Children.Add(Muted("Hallow Authenticator: your 2FA codes on the phone (Home > Authenticator on the phone, needs HTTPS). Encrypted backups the phone sends are kept, unopened, in %APPDATA%\\HallowAuthenticator\\backups."));
+            help.Children.Add(Muted("Hallow Authenticator: your 2FA codes on the phone (Home > Authenticator on the phone, needs HTTPS). Encrypted backups the phone sends are kept, unopened, in %APPDATA%\\HallowAuthenticator\\backups; its automatic backups (the newest 10) in %APPDATA%\\HallowAuthenticator\\autobackups."));
             sp.Children.Add(new TextBlock { Text = "Hallow Remote " + Program.Version + "  -  icons: Font Awesome Free (CC BY 4.0)", Foreground = (Brush)FindResource("Muted"), FontSize = 11, Margin = new Thickness(0, 10, 0, 0) });
             var phoneTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) }; phoneTimer.Tick += (s, e) => ShowPhone(); phoneTimer.Start(); ShowPhone();
             return new ScrollViewer { Content = sp, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };

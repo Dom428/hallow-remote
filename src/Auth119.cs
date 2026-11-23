@@ -34,7 +34,7 @@ namespace HallowRemote
         static readonly Dictionary<string, string> AuthFiles = new Dictionary<string, string> {
             { "", "text/html; charset=utf-8" }, { "index.html", "text/html; charset=utf-8" }, { "app.css", "text/css; charset=utf-8" }, { "app.js", "text/javascript; charset=utf-8" },
             { "otp.js", "text/javascript; charset=utf-8" }, { "vault.js", "text/javascript; charset=utf-8" }, { "qr.js", "text/javascript; charset=utf-8" }, { "importers.js", "text/javascript; charset=utf-8" },
-            { "scrypt.js", "text/javascript; charset=utf-8" }, { "sw.js", "text/javascript; charset=utf-8" }, { "manifest.json", "application/manifest+json" },
+            { "scrypt.js", "text/javascript; charset=utf-8" }, { "exporters.js", "text/javascript; charset=utf-8" }, { "qrcode.js", "text/javascript; charset=utf-8" }, { "sw.js", "text/javascript; charset=utf-8" }, { "manifest.json", "application/manifest+json" },
             { "icon-192.png", "image/png" }, { "icon-512.png", "image/png" }, { "icon-mask-512.png", "image/png" }, { "apple-touch-icon.png", "image/png" } };
         public static byte[] AuthResource(string name) { return Resource("auth." + (name == "" ? "index.html" : name)); }
         public static string AuthVersion
@@ -67,23 +67,25 @@ namespace HallowRemote
             var api = sub.Substring(4);
             if (cert == null) { AuthJson(st, 403, R(false, "Hallow Authenticator needs HTTPS - turn it on in Hallow Remote on your PC")); return; }
             bool post = method == "POST";
-            if (!post && api == "hello") { AuthJson(st, 200, Ok("version", Program.Version, "app", AuthVersion, "csrf", CsrfToken, "accent", Program.AccentHex, "pc", Environment.MachineName, "backups", BackupCount())); return; }
+            if (!post && api == "hello") { AuthJson(st, 200, Ok("version", Program.Version, "app", AuthVersion, "csrf", CsrfToken, "accent", Program.AccentHex, "pc", Environment.MachineName, "backups", BackupCount(), "autobackups", AutoBackupCount())); return; }
             if (!post && api == "backups") { AuthJson(st, 200, Ok("items", BackupList())); return; }
+            if (!post && (api == "autobackups" || api.StartsWith("autobackups/"))) { AutoBackupGet(st, api); return; }   // v1.21
             if (!post && api.StartsWith("backups/"))
             {
                 var name = Uri.UnescapeDataString(api.Substring(8)); var f = Path.Combine(BackupDir, name);
                 if (!BackupName.IsMatch(name) || !File.Exists(f)) { AuthJson(st, 404, R(false, "No such backup")); return; }
                 SendAuth(st, 200, "application/json", File.ReadAllBytes(f), "Content-Disposition: attachment; filename=\"" + name + "\"\r\n"); return;
             }
-            if (!post || (api != "backup" && api != "xfer" && api != "xfer-done" && api != "mirror" && api != "mirror-off")) { AuthJson(st, post ? 404 : 405, R(false, "Not found")); return; }
+            if (!post || (api != "backup" && api != "autobackup" && api != "xfer" && api != "xfer-done" && api != "mirror" && api != "mirror-off")) { AuthJson(st, post ? 404 : 405, R(false, "Not found")); return; }
             string why; if (!CsrfOk(headers, out why)) { AuthJson(st, 403, R(false, why)); return; }
             if (Paused) { AuthJson(st, 403, R(false, "The remote is paused on your PC")); return; }
-            int max = api == "backup" ? MaxBackupBytes : api == "mirror" ? MaxMirrorBytes : 4096, code;
+            int max = api == "backup" || api == "autobackup" ? MaxBackupBytes : api == "mirror" ? MaxMirrorBytes : 4096, code;
             var body2 = ReadBody(st, headers, buf, bodyAt, n, max, out code);
             if (body2 == null) { AuthJson(st, code, R(false, code == 413 ? "Too big" : "Bad request")); return; }
             client.SendTimeout = 15000;
             var text = Encoding.UTF8.GetString(body2);
             if (api == "backup") { AuthBackup(st, text); return; }
+            if (api == "autobackup") { AuthAutoBackup(st, text); return; }   // v1.21
             if (api == "mirror") { AuthMirror(st, text); return; }
             if (api == "mirror-off") { try { if (File.Exists(MirrorFile)) File.Delete(MirrorFile); } catch { } if (Log != null) Log("Authenticator: the PC mirror was turned off from the phone"); AuthJson(st, 200, Ok()); return; }
             var p = Query(text); string id; p.TryGetValue("id", out id);
@@ -118,7 +120,7 @@ namespace HallowRemote
             Dictionary<string, object> m;
             try { m = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = 8 * 1024 * 1024 }.Deserialize<Dictionary<string, object>>(json); } catch { return null; }
             if (m == null || m.Keys.Any(k => !allowed.Contains(k)) || required.Any(k => !(m.ContainsKey(k) && m[k] is string))) return null;
-            foreach (var k in new[] { "iv", "ct", "salt" }) if (m.ContainsKey(k)) { try { Convert.FromBase64String((string)m[k]); } catch { return null; } }
+            foreach (var k in new[] { "iv", "ct", "salt", "wiv", "wct" }) if (m.ContainsKey(k)) { try { Convert.FromBase64String((string)m[k]); } catch { return null; } }
             return m;
         }
         void AuthBackup(Stream st, string json)
@@ -190,6 +192,6 @@ namespace HallowRemote
             return "ok";
         }
         public int OffersWaiting { get { lock (offers) { Expire(); return offers.Count; } } }
-        Dictionary<string, object> AuthState() { return new Dictionary<string, object> { { "https", cert != null }, { "backups", BackupCount() } }; }
+        Dictionary<string, object> AuthState() { return new Dictionary<string, object> { { "https", cert != null }, { "backups", BackupCount() }, { "autobackups", AutoBackupCount() }, { "lastAuto", LastAutoBackup() } }; }
     }
 }
