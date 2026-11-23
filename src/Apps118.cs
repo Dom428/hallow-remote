@@ -64,13 +64,15 @@ namespace HallowRemote
         {
             Dictionary<string, object> s; var o = AppBase("VPN", out s); if (o == null || s == null) return o;
             bool on = Flag(s, "connected"), ing = Flag(s, "connecting");
-            var proto = OneOf(Get(s, "protocol"), "IKEv2", "NordLynx"); var next = VpnNext(s);
+            bool v126 = Vpn126(s);   // v1.20: VPN 1.2.6+ says itself what the next connect uses and whether Windows asks (UAC)
+            var proto = OneOf(Get(s, "protocol"), "IKEv2", "NordLynx"); var next = v126 ? OneOf(Get(s, "nextProtocol"), "IKEv2", "NordLynx") : VpnNext(s);
             o["connected"] = on; o["connecting"] = ing; o["paused"] = Flag(s, "paused");
             o["server"] = on ? Short(Get(s, "server") as string, 24) : null; o["country"] = on ? Short(Get(s, "country") as string, 40) : null;
             o["protocol"] = proto; o["next"] = next;
             o["killSwitch"] = Flag(s, "killSwitch"); o["leakCheck"] = on ? OneOf(Get(s, "leakCheck"), "ok", "warn", "fail") : null;
             o["account"] = Get(s, "account") is bool ? Flag(s, "account") : true;
             o["canConnect"] = next == "IKEv2" && !on && !ing; o["canDisconnect"] = (on || ing) && proto == "IKEv2";
+            if (v126) Vpn126State(o, s, on, ing, proto, next);
             return o;
         }
 
@@ -127,7 +129,7 @@ namespace HallowRemote
             return js.Serialize(new Dictionary<string, object> { { "ok", true }, { "running", true }, { "version", Short(ver, 16) }, { "canSearch", VerAtLeast(ver, 1, 3) },
                 { "vpnLocked", Flag(l, "vpnLocked") }, { "held", OneOf(Get(l, "held"), "vpn", "game") }, { "game", Short(Get(l, "game") as string, 60) },
                 { "down", NumOrNull(Get(l, "downBps"), 0) ?? 0 }, { "up", NumOrNull(Get(l, "upBps"), 0) ?? 0 }, { "torrents", list }, { "stats", stats },
-                { "vpn", Installed("VPN") }, { "categories", new[] { "Movies", "TV", "Music", "Games", "Other" } } });
+                { "vpn", Installed("VPN") }, { "categories", TorCategories(ver) ?? new List<string> { "Movies", "TV", "Music", "Games", "Other" } }, { "realCategories", VerAtLeast(ver, 1, 8) } });
         }
 
         // ---- Gear: battery per device (never the Bluetooth key in "alert")
@@ -140,10 +142,13 @@ namespace HallowRemote
             {
                 var d = x as Dictionary<string, object>; if (d == null) continue;
                 devs.Add(new Dictionary<string, object> { { "kind", OneOf(Get(d, "kind"), GearKinds) ?? "other" }, { "name", Short(Get(d, "name") as string, 40) }, { "battery", IntOrNull(Get(d, "battery")) },
-                    { "charging", Flag(d, "charging") }, { "full", Flag(d, "full") }, { "asleep", Flag(d, "asleep") }, { "connected", Flag(d, "connected") }, { "wired", Flag(d, "wired") } });
+                    { "charging", Flag(d, "charging") }, { "full", Flag(d, "full") }, { "asleep", Flag(d, "asleep") }, { "connected", Flag(d, "connected") }, { "wired", Flag(d, "wired") },
+                    // v1.20 (Gear 1.3.1+): remembered values and how old they are, or still waiting for the first report during a game
+                    { "lastKnown", Flag(d, "lastKnown") }, { "waiting", Flag(d, "waiting") }, { "ago", Flag(d, "lastKnown") ? MinutesAgo(Get(d, "updated") ?? Get(d, "lastSeen")) : null } });
                 if (devs.Count >= 16) break;
             }
             o["devices"] = devs; o["lowAt"] = IntOrNull(Get(s, "lowAt")) ?? 20;
+            Gear120(o, s);
             return o;
         }
 
@@ -157,6 +162,7 @@ namespace HallowRemote
             var f = Get(s, "feeder") as Dictionary<string, object>;
             o["feeder"] = f == null ? null : new Dictionary<string, object> { { "online", Flag(f, "online") }, { "nextFeed", When(Get(f, "nextFeed")) }, { "todayMeals", IntOrNull(Get(f, "todayMeals")) },
                 { "todayGrams", NumOrNull(Get(f, "todayGrams"), 0) }, { "foodLow", Flag(f, "foodLow") }, { "canFeed", Flag(f, "canFeed") } };
+            Home120(o, s, f);   // v1.20: the Feed now range, Demo mode
             var w = Get(s, "fountain") as Dictionary<string, object>;
             o["fountain"] = w == null ? null : new Dictionary<string, object> { { "online", Flag(w, "online") }, { "waterLow", Flag(w, "waterLow") }, { "waterPct", NumOrNull(Get(w, "waterPct"), 0) },
                 { "pumpOn", FlagOrNull(w, "pumpOn") }, { "filterDue", Flag(w, "filterDue") }, { "cleaningDue", Flag(w, "cleaningDue") } };
@@ -185,13 +191,15 @@ namespace HallowRemote
         static Dictionary<string, object> TasksLive(Dictionary<string, object> t)
         {
             if (t == null || !(bool)t["running"]) return null;
-            var s = Family.StatusFile("Tasks");
-            return new Dictionary<string, object> { { "cpu", NumOrNull(Get(s, "cpu"), 0) }, { "ram", NumOrNull(Get(s, "ram"), 0) }, { "gpu", NumOrNull(Get(s, "gpu"), 0) } };
+            var s = TasksQuick(t["version"] as string) ?? Family.StatusFile("Tasks");   // v1.20: Tasks 1.2+'s cached "quick" sample (at most 5 s old)
+            return new Dictionary<string, object> { { "cpu", NumOrNull(Get(s, "cpu"), 0) }, { "ram", NumOrNull(Get(s, "ram"), 0) }, { "gpu", NumOrNull(Get(s, "gpu"), 0) },
+                { "busyApps", IntOrNull(Get(s, "busyApps")) }, { "busyPercent", IntOrNull(Get(s, "busyPercent")) }, { "notResponding", IntOrNull(Get(s, "notResponding")) } };   // counts only, never names
         }
         static Dictionary<string, object> EmailState()
         {
             Dictionary<string, object> s; var o = AppBase("Email", out s); if (o == null || s == null) return o;
-            o["unread"] = IntOrNull(Get(s, "unread"));   // the total only - no account labels, never subjects or senders
+            o["unread"] = IntOrNull(Get(s, "unread"));   // the total, never subjects or senders
+            Email120(o, s);   // v1.20: per account - a label only when you chose it and it isn't an address, and why it needs attention
             return o;
         }
         static Dictionary<string, object> FinancialsState()
@@ -243,6 +251,7 @@ namespace HallowRemote
                 case "tor:search": return TimeSpan.FromSeconds(4);
                 case "tor:add": return TimeSpan.FromSeconds(2);
                 case "fin": return TimeSpan.FromSeconds(2);
+                case "gear:refresh": return TimeSpan.FromSeconds(10);   // v1.20 (Hallow Gear itself allows one every 30 s)
                 case "auth:backup": return TimeSpan.FromSeconds(10);   // v1.19
                 case "auth:mirror": return TimeSpan.FromSeconds(2);
                 case "auth:xfer": return TimeSpan.Zero;   // counted in the 30 a minute only (the id is 128 random bits)
@@ -297,6 +306,7 @@ namespace HallowRemote
                 case "tor": return d == "pause" || d == "resume" ? "tor:one" : d == "pauseall" || d == "resumeall" ? "tor:all" : d == "add" || d == "searchadd" ? "tor:add" : d == "search" ? "tor:search" : null;
                 case "home": return d == "feed" ? "home:feed" : null;
                 case "fin": return d == "lock" ? "fin" : null;
+                case "gear": return d == "refresh" ? "gear:refresh" : null;   // v1.20
             }
             return null;
         }
@@ -312,16 +322,19 @@ namespace HallowRemote
         }
         static Dictionary<string, object> ActCheck(string app, string d, Dictionary<string, string> p)
         {
-            if (!Installed(app == "vpn" ? "VPN" : app == "tor" ? "Torrents" : app == "home" ? "Home" : "Financials")) return R(false, "That app isn't installed");
+            if (!Installed(app == "vpn" ? "VPN" : app == "tor" ? "Torrents" : app == "home" ? "Home" : app == "gear" ? "Gear" : "Financials")) return R(false, "That app isn't installed");
             if (app == "home")
             {
                 string c, ns; int portions; p.TryGetValue("confirm", out c); p.TryGetValue("n", out ns);
                 if (c != "yes") return R(false, "Confirm on the phone first");
-                if (!int.TryParse(ns ?? "", out portions) || portions < 1 || portions > 12) return R(false, "Pick 1 to 12 portions");
+                int lo, hi; FeedRange(out lo, out hi);   // v1.20: Hallow Home's own Feed now range when it says it
+                if (!Regex.IsMatch(ns ?? "", "^[0-9]{1,2}$") || !int.TryParse(ns, out portions) || portions < lo || portions > hi) return R(false, lo == hi ? "Hallow Home feeds " + lo + (lo == 1 ? " portion" : " portions") + " at a time" : "Pick " + lo + " to " + hi + " portions");
             }
+            if (app == "gear") { var why = GearRefreshCheck(); if (why != null) return R(false, why); }
             if (app == "tor")
             {
-                string id, cat; p.TryGetValue("id", out id); p.TryGetValue("cat", out cat);
+                string id, cat, sid; p.TryGetValue("id", out id); p.TryGetValue("cat", out cat); p.TryGetValue("sid", out sid);
+                if ((d == "search" || d == "searchadd") && !string.IsNullOrEmpty(sid) && !SidRx.IsMatch(sid)) return R(false, "Reload the page and try again");
                 if ((d == "pause" || d == "resume") && (id == null || !Regex.IsMatch(id, "^[0-9a-f]{16}$"))) return R(false, "Not one of your torrents");
                 if (d == "searchadd" && (id == null || !Regex.IsMatch(id, "^[A-Za-z0-9_-]{1,16}$"))) return R(false, "Search again");
                 if ((d == "add" || d == "searchadd" || d == "search") && !string.IsNullOrEmpty(cat) && !CatRx.IsMatch(cat)) return R(false, "Not a category name");
@@ -344,6 +357,7 @@ namespace HallowRemote
         Dictionary<string, object> ActRun(string app, string d, Dictionary<string, string> p)
         {
             string err;
+            if (app == "gear") return GearRefresh();
             if (app == "fin")
             {
                 err = Family.Error(Family.Send("Financials", "lock", 6000), "Hallow Financials isn't running");
@@ -373,6 +387,7 @@ namespace HallowRemote
                     if (Log != null) Log("VPN disconnecting"); return R(true, "Disconnecting");
                 }
                 if ((bool)v["connected"] || (bool)v["connecting"]) return R(false, "Hallow VPN is already " + ((bool)v["connected"] ? "connected" : "connecting"));
+                if (v.ContainsKey("keepTarget")) return VpnConnect126(v, d);   // v1.20: VPN 1.2.6+ - its own UAC answer, and the remembered server is kept
                 lock (typeof(Server)) vpnNextCache = null;
                 var next = VpnNext(Family.StatusFile("VPN") ?? new Dictionary<string, object>());
                 if (next != "IKEv2") return R(false, next == "NordLynx" ? "The next connect uses NordLynx, which needs a click on the PC - connect from the PC" : "Hallow VPN didn't say which protocol it would use - connect from the PC");
@@ -412,7 +427,7 @@ namespace HallowRemote
             if (d == "searchadd")
             {
                 if (!VerAtLeast(ver, 1, 3)) return R(false, "Update Hallow Torrents for search");
-                var r = Family.Send("Torrents", "search-add " + p["id"] + catPart, 45000);
+                var r = Family.Send("Torrents", "search-add " + p["id"] + catPart + TorClient(ver, p), 45000);
                 err = Family.Error(r, "Hallow Torrents isn't running"); if (err != null) return R(false, Scrub(err));
                 if (Log != null) Log("a torrent added");
                 return R(true, AddedMsg(r));
@@ -421,7 +436,7 @@ namespace HallowRemote
             {
                 if (!VerAtLeast(ver, 1, 3)) return R(false, "Update Hallow Torrents for search");
                 string sc; p.TryGetValue("scat", out sc); string scv;
-                var line = "search " + Words(p["q"]) + " --n 20" + (sc != null && SearchCats.TryGetValue(sc, out scv) ? " --cat " + scv : "");
+                var line = "search " + Words(p["q"]) + " --n 20" + (sc != null && SearchCats.TryGetValue(sc, out scv) ? " --cat " + scv : "") + TorClient(ver, p);
                 var r = Family.Send("Torrents", line, 45000);
                 err = Family.Error(r, "Hallow Torrents didn't answer in time"); if (err != null) return R(false, Scrub(err));
                 Dictionary<string, object> sr = null; try { sr = js.Deserialize<Dictionary<string, object>>(r.Substring(3)); } catch { }

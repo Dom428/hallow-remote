@@ -8,7 +8,7 @@
 <style>
 :root{--accent:#f07820;--on-accent:#1a0e04;--accent-text:#f07820;--game:#f07820;--shadow:#000a;--pill-bg:#6ed28c;--pill-fg:#0e2416;--good-text:#6ed28c;--warn-text:#f0be5a;--bg:#16121c;--panel:#211b2a;--btn:#2a2333;--line2:#2e2639;--line:#3a3248;--pop:#241e2e;--note:#2a2238;--note-line:#4a3d60;--text:#ece8f4;--muted:#8f88a0;--soft:#c0b8d0;--lilac:#a98be0;--green:#6ed28c;--amber:#f0be5a;--red:#ff6b6b;--redfill:#e0424c;--alertbg:#2e1a22;--dotoff:#5a5366;--blue:#5ab4f0;--on-green:#0e2416;color-scheme:dark}
 /* v1.16: light mode (the phone's setting, or the choice on Home) - the Hallow light palette */
-:root.light{--game:#b5540c;--shadow:#1e1a2633;--pill-bg:#d7f0e0;--pill-fg:#145c33;--good-text:#1b7f47;--warn-text:#9c6300;--bg:#f6f4fa;--panel:#ffffff;--btn:#eeeaf5;--line2:#dad3e6;--line:#dad3e6;--pop:#ffffff;--note:#ffffff;--note-line:#dad3e6;--text:#1e1a26;--muted:#6b6478;--soft:#4f4860;--lilac:#7a5cc0;--green:#1e8e4f;--amber:#a66a00;--red:#c2333f;--redfill:#c2333f;--alertbg:#fbeaec;--dotoff:#b8b0c6;--blue:#1f6fb0;--on-green:#ffffff;color-scheme:light}
+:root.light{--game:#b5540c;--shadow:#1e1a2633;--pill-bg:#d7f0e0;--pill-fg:#145c33;--good-text:#1b7f47;--warn-text:#9c6300;--bg:#f6f4fa;--panel:#ffffff;--btn:#eeeaf5;--line2:#dad3e6;--line:#dad3e6;--pop:#ffffff;--note:#ffffff;--note-line:#dad3e6;--text:#1e1a26;--muted:#6b6478;--soft:#4f4860;--lilac:#7a5cc0;--green:#1b7f47;--amber:#a66a00;--red:#c2333f;--redfill:#c2333f;--alertbg:#fbeaec;--dotoff:#b8b0c6;--blue:#1f6fb0;--on-green:#ffffff;color-scheme:light}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.35 "Segoe UI",system-ui,-apple-system,sans-serif;padding:16px 14px calc(30px + env(safe-area-inset-bottom))}
 header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
@@ -226,6 +226,7 @@ function render(s) {
           '<span class="p" id="p_' + c.id + '">' + c.volume + '%</span><button class="btn m' + (c.muted ? ' on' : '') + '" onclick="act(\'a=mute&ch=' + c.id + '\')">' + (c.muted ? 'Muted' : 'Mute') + '</button></div>';
         h += appRows(mx, c.id);   // v1.15: the apps in this channel (Mixer 3.24+)
       });
+      if (mx.spotifyAdMuted || mx.adsMutedToday) h += '<div class="note2" id="mx_ads">' + [mx.spotifyAdMuted ? '<span class="good">Spotify ad muted</span>' : '', mx.adsMutedToday ? num(mx.adsMutedToday) + (mx.adsMutedToday == 1 ? ' ad' : ' ads') + ' muted today' : ''].filter(Boolean).join(' &middot; ') + '</div>';   // v1.20: Hallow Mixer 3.27
       h += '</div>';
       if (mx.presets && mx.presets.length) h += '<h2>Presets</h2><div class="chips">' + mx.presets.map(function (p) { return '<button class="btn go" onclick="act(\'a=preset&name=' + encodeURIComponent(p) + '\')">' + esc(p) + '</button>'; }).join('') + '</div>';
       el('mixer').innerHTML = h;
@@ -868,6 +869,7 @@ function post(params) {
 }
 function fmtB(n) { if (n == null) return '-'; var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0; while (n >= 1024 && i < 4) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + ' ' + u[i]; }
 function fmtS(bps) { return fmtB(bps || 0) + '/s'; }
+function agoText(m) { return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.floor(m / 60) + ' h ago' : Math.floor(m / 1440) + (m < 2880 ? ' day ago' : ' days ago'); }   // v1.20
 function fmtEta(s) { if (s == null) return ''; s = Math.round(s); return s >= 86400 ? Math.floor(s / 86400) + 'd' : s >= 3600 ? Math.floor(s / 3600) + 'h ' + Math.floor(s % 3600 / 60) + 'm' : s >= 60 ? Math.floor(s / 60) + 'm' : s + 's'; }
 function notRunning(name) { return '<div class="sub">' + esc(name) + ' isn\'t running on your PC.</div>'; }
 var lastMore = '', feedArm = null, feedN = 1;
@@ -886,11 +888,20 @@ function renderMore(s) {
       g += '<div class="kv"><span>Kill switch</span><span class="' + (v.killSwitch ? 'good' : '') + '">' + (v.killSwitch ? 'On' : 'Off') + '</span></div>';
       if (v.connected) g += '<div class="kv"><span>Leak check</span><span class="' + (v.leakCheck == 'ok' ? 'good' : v.leakCheck ? 'warn' : '') + '">' + (v.leakCheck == 'ok' ? 'No leaks' : v.leakCheck == 'warn' ? 'Check on the PC' : v.leakCheck == 'fail' ? 'Leak found - check on the PC' : 'Checking...') + '</span></div>';
       if (!v.connected && !v.connecting && v.next) g += '<div class="kv"><span>Next connect</span><span>' + esc(v.next) + '</span></div>';
+      if (v.keepTarget && v.target) g += '<div class="kv"><span>Your server</span><span id="vpn_target">' + esc(v.target.length == 2 ? v.target.toUpperCase() : v.target.charAt(0).toUpperCase() + v.target.slice(1)) + '</span></div>';   // v1.20
+      if (v.windowsLogin != null) g += '<div class="kv"><span>Windows login</span><span id="vpn_login" class="' + (v.windowsLogin ? 'good' : 'warn') + '">' + (v.windowsLogin ? 'Saved' : 'Needed') + '</span></div>';
       if (v.canConnect || v.canDisconnect) {
         g += '<div class="dbtns">' + (v.canConnect ? '<button class="btn go" id="vpn_fast" onclick="post({app:\'vpn\',do:\'fastest\'})">Connect fastest</button><button class="btn" id="vpn_game" onclick="post({app:\'vpn\',do:\'gaming\'})">Best for gaming</button>' : '') +
           (v.canDisconnect ? '<button class="btn" id="vpn_off" onclick="post({app:\'vpn\',do:\'disconnect\'})">Disconnect</button>' : '') + '</div>';
-      } else if ((v.connected || v.connecting ? v.protocol : v.next) == 'NordLynx') g += '<div class="note2" id="vpn_pc">NordLynx: connect and disconnect only from the PC (Windows asks there first).</div>';
-      else if (!v.connected && !v.connecting) g += '<div class="note2">Connect from the PC.</div>';
+        if (v.canConnect && v.keepTarget) g += '<div class="note2" id="vpn_keep">A connect from the phone is one-off: Hallow VPN keeps your own server for its Connect button.</div>';
+      }
+      if (v.keepTarget) {   // v1.20: VPN 1.2.6 says itself what would make Windows ask
+        if (!v.connected && !v.connecting && !v.canConnect) g += '<div class="note2" id="vpn_pc">' + (v.uacConnect ? 'The next connect uses ' + esc(v.next || 'NordLynx') + ' and Windows asks first (UAC) - connect from the PC.' : v.windowsLogin === false ? 'Windows needs your Nord login first - connect once from the PC (Windows shows its sign-in box there).' : 'Connect from the PC.') + '</div>';
+        else if ((v.connected || v.connecting) && !v.canDisconnect) g += '<div class="note2" id="vpn_pc">Windows asks first (UAC) to disconnect ' + esc(v.protocol || 'NordLynx') + ' - disconnect from the PC.</div>';
+      } else if (!v.canConnect && !v.canDisconnect) {
+        if ((v.connected || v.connecting ? v.protocol : v.next) == 'NordLynx') g += '<div class="note2" id="vpn_pc">NordLynx: connect and disconnect only from the PC (Windows asks there first).</div>';
+        else if (!v.connected && !v.connecting) g += '<div class="note2">Connect from the PC.</div>';
+      }
     }
     g += '</div>';
   }
@@ -907,7 +918,7 @@ function renderMore(s) {
   // Home
   var ho = a2.home;
   if (ho) {
-    g = '<div class="dc full" id="c_home"><h3>Hallow Home</h3>';
+    g = '<div class="dc full" id="c_home"><h3>Hallow Home' + (ho.running && ho.demo ? ' <span class="sub" id="home_demo">Demo</span>' : '') + '</h3>';
     if (!ho.running) g += notRunning('Hallow Home');
     else if (!ho.configured) g += '<div class="sub">Set up Home Assistant in Hallow Home on your PC.</div>';
     else {
@@ -919,7 +930,7 @@ function renderMore(s) {
       if (ho.lock && ho.lock != 'unknown') g += '<div class="kv"><span>Door lock</span><span>' + ({ 'bluetooth-only': 'Bluetooth only', unavailable: 'Unavailable', locked: 'Locked', unlocked: 'Unlocked', jammed: 'Jammed' }[ho.lock]) + '</span></div>';
       g += '<div class="kv"><span>Alerts</span><span class="' + (ho.alerts ? 'warn' : '') + '">' + (ho.alerts ? ho.alerts + ' - ' + esc((ho.alertFlags || []).join(', ').replace(/-/g, ' ')) : 'None') + '</span></div>';
       if (fd) {
-        if (feedArm) g += '<div class="feedc"><button class="btn" onclick="feedStep(-1)">-</button><span class="n" id="feed_n">' + feedN + '</span><button class="btn" onclick="feedStep(1)">+</button><span class="sub">' + (feedN == 1 ? 'portion' : 'portions') + '</span></div>' +
+        if (feedArm) g += '<div class="feedc"><button class="btn" onclick="feedStep(-1)"' + (feedN <= feedLo() ? ' disabled' : '') + '>-</button><span class="n" id="feed_n">' + feedN + '</span><button class="btn" onclick="feedStep(1)"' + (feedN >= feedHi() ? ' disabled' : '') + '>+</button><span class="sub" id="feed_unit">' + (feedN == 1 ? 'portion' : 'portions') + (fd.gramsPerPortion ? ' (about ' + Math.round(feedN * fd.gramsPerPortion) + ' g)' : '') + '</span></div>' +
           '<div class="dbtns"><button class="btn danger" id="feed_yes" onclick="feedGo()">Feed ' + feedN + ' now</button><button class="btn" id="feed_no" onclick="feedCancel()">Cancel</button></div>';
         else g += '<div class="dbtns"><button class="btn go" id="feed_btn" onclick="feedOpen()"' + (fd.canFeed ? '' : ' disabled') + '>Feed now...</button></div>' + (fd.canFeed ? '' : '<div class="note2">The feeder can\'t feed right now.</div>');
       }
@@ -934,25 +945,33 @@ function renderMore(s) {
     var tl = lv.tasks || {};
     g += '<div class="dc full"><h3>Hallow Tasks</h3>' + (!tk.running ? notRunning('Hallow Tasks') : '<div class="stats" style="grid-template-columns:repeat(3,1fr)">' +
       [['CPU', tl.cpu], ['RAM', tl.ram], ['GPU', tl.gpu]].map(function (x) { return '<div class="stat" style="background:var(--btn)"><b>' + (x[1] == null ? '-' : x[1] + '%') + '</b><small>' + x[0] + '</small></div>'; }).join('') + '</div>' +
+      (tl.busyApps != null ? '<div class="kv"><span>Busy apps</span><span id="tasks_busy">' + tl.busyApps + (tl.busyPercent ? ' <span class="sub">(using ' + tl.busyPercent + '% or more)</span>' : '') + '</span></div>' : '') +   // v1.20
+      (tl.notResponding ? '<div class="kv"><span>Not responding</span><span class="warn" id="tasks_hung">' + tl.notResponding + (tl.notResponding == 1 ? ' app' : ' apps') + ' - close it on the PC</span></div>' : '') +
       (tk.sampled ? '<div class="note2">Measured ' + esc(tk.sampled) + '</div>' : '')) + '</div>';
   }
   var ge = a2.gear;
   if (ge) {
-    g += '<div class="dc full"><h3>Hallow Gear</h3>';
+    g += '<div class="dc full" id="c_gear"><h3>Hallow Gear</h3>';
     if (!ge.running) g += notRunning('Hallow Gear');
     else if (!ge.devices.length) g += '<div class="sub">No devices found.</div>';
     else g += ge.devices.map(function (d) {
-      var st = !d.connected ? 'Not connected' : d.asleep ? 'Asleep' : d.charging ? 'Charging' : d.wired && d.battery == null ? 'Wired' : d.full ? 'Full' : '';
+      var st = d.waiting ? 'waiting for its battery report' + (ge.game ? ' (game running)' : '') : !d.connected ? 'Not connected' : d.asleep ? 'Asleep' : d.charging ? 'Charging' : d.wired && d.battery == null ? 'Wired' : d.full ? 'Full' : '';
+      if (!d.waiting && d.lastKnown && d.battery != null) st = 'last known' + (d.ago != null ? ' &middot; ' + agoText(d.ago) : '') + (st ? ' &middot; ' + st : '');   // v1.20
       var low = d.battery != null && d.battery <= ge.lowAt && !d.charging;
       return '<div class="gd"><b>' + esc(d.name || d.kind) + '</b><span><span class="' + (low ? 'warn' : '') + '">' + (d.battery != null ? d.battery + '%' : '') + '</span>' + (st ? ' <span class="sub">' + st + '</span>' : '') + '</span></div>';
     }).join('');
+    if (ge.running && ge.alert && ge.alert.deviceName) g += '<div class="note2" id="gear_alert"><span class="warn">' + esc(ge.alert.deviceName) + ': battery ' + (ge.alert.level == 'critical' ? 'very low' : 'low') + '</span> - the alert waits until your game ends</div>';
+    if (ge.running && ge.canRefresh != null) g += '<div class="dbtns"><button class="btn" id="gear_refresh" onclick="post({app:\'gear\',do:\'refresh\'})"' + (ge.canRefresh ? '' : ' disabled') + '>Refresh</button></div>' + (ge.game ? '<div class="note2">Refresh waits until your game ends.</div>' : '');
     g += '</div>';
   }
   if (g) h += '<h2>This PC</h2><div class="grp">' + g + '</div>';
   // Personal: Email, Financials
   g = '';
   var em = a2.email;
-  if (em) g += '<div class="dc"><h3>Hallow Email</h3>' + (!em.running ? notRunning('Hallow Email') : '<div class="dv">' + num(em.unread) + '</div><div class="sub">unread</div>') + '</div>';
+  if (em) g += '<div class="dc' + (em.accounts && em.accounts.length > 1 ? ' full' : '') + '" id="c_email"><h3>Hallow Email</h3>' + (!em.running ? notRunning('Hallow Email') : '<div class="dv">' + num(em.unread) + '</div><div class="sub">unread</div>' +
+    (em.accounts && em.accounts.length > 1 || em.needsAttention ? (em.accounts || []).map(function (a) {   // v1.20: per account (labels only when you chose them)
+      return '<div class="kv"><span>' + esc(a.label) + '</span><span>' + num(a.unread) + ' unread</span></div>' + (a.attention ? '<div class="note2"><span class="warn">' + esc(a.attention) + '</span></div>' : '');
+    }).join('') : '')) + '</div>';
   var fi = a2.financials;
   if (fi) {
     g += '<div class="dc" id="c_fin"><h3>Hallow Financials</h3>';
@@ -964,16 +983,23 @@ function renderMore(s) {
   if (g) h += '<h2>Personal</h2><div class="grp">' + g + '</div>';
   el('v_more').innerHTML = h;
 }
-function feedOpen() { feedArm = 1; feedN = 1; lastMore = ''; renderMore(last); }
+// v1.20: Hallow Home's own Feed now range (minPortions / maxPortions), 1 to 12 when it doesn't say
+function feedOf() { var h = last && last.apps2 && last.apps2.home; return (h && h.feeder) || {}; }
+function feedLo() { var f = feedOf(); return f.minPortions || 1; }
+function feedHi() { var f = feedOf(); return f.maxPortions || 12; }
+function feedOpen() { feedArm = 1; feedN = feedLo(); lastMore = ''; renderMore(last); }
 function feedCancel() { feedArm = null; lastMore = ''; renderMore(last); }
-function feedStep(d) { feedN = Math.max(1, Math.min(12, feedN + d)); lastMore = ''; renderMore(last); }
+function feedStep(d) { feedN = Math.max(feedLo(), Math.min(feedHi(), feedN + d)); lastMore = ''; renderMore(last); }
 function feedGo() { var n = feedN; feedArm = null; lastMore = ''; renderMore(last); post({ app: 'home', do: 'feed', n: n, confirm: 'yes' }); }
 // ---- Torrents tab: the list comes from api/torrents (every 2 s while the tab is open)
-var torTimer = null, torData = null, torBuilt = false, torLast = '';
+var torTimer = null, torData = null, torBuilt = false, torLast = '', torCatKey = '';
+// v1.20: this page's own id for Hallow Torrents 1.8's per-client search results (another phone or Hub can't replace them)
+var torSid = (function () { var k = 'hr_torsid', v = null; try { v = sessionStorage.getItem(k); } catch (e) { } if (!v || !/^[0-9a-f]{16}$/.test(v)) { var b = new Uint8Array(8); crypto.getRandomValues(b); v = Array.prototype.map.call(b, function (x) { return ('0' + x.toString(16)).slice(-2); }).join(''); try { sessionStorage.setItem(k, v); } catch (e) { } } return v; })();
+function torCatOpts(cats) { return '<option value="">Category: let Torrents pick</option>' + cats.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join(''); }
 function renderTorTab(s) {
   if (!torBuilt) {
     torBuilt = true;
-    var cats = ['Movies', 'TV', 'Music', 'Games', 'Other'], opts = '<option value="">Category: let Torrents pick</option>' + cats.map(function (c) { return '<option>' + c + '</option>'; }).join('');
+    var opts = torCatOpts(['Movies', 'TV', 'Music', 'Games', 'Other']);
     el('v_tor').innerHTML = '<div id="tor_head"></div><div id="tor_list"></div>' +
       '<h2>Add a magnet link</h2><div class="card"><textarea class="in" id="tor_mag" rows="2" placeholder="magnet:?xt=urn:btih:..." autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="frm"><select id="tor_cat">' + opts + '</select><button class="btn go" id="tor_addbtn" onclick="torAdd()">Add</button></div><div class="note2">It starts only over the VPN.</div></div>' +
       '<div id="tor_searchbox" style="display:none"><h2>Search</h2><div class="card"><div class="frm" style="margin-top:0"><input class="in" id="tor_q" placeholder="Search your indexers" autocomplete="off" onkeydown="if(event.key==\'Enter\')torSearch()"><button class="btn go" id="tor_sbtn" onclick="torSearch()">Search</button></div><div class="frm"><select id="tor_scat"><option value="">All kinds</option><option value="movies">Movies</option><option value="tv">TV</option><option value="music">Music</option><option value="games">Games</option><option value="software">Software</option><option value="books">Books</option><option value="other">Other</option></select></div><div id="tor_results"></div></div></div>';
@@ -1009,6 +1035,7 @@ function torRender() {
     }).join('') : '<div class="sub">No torrents.</div>') + '</div>';
   }
   el('tor_head').innerHTML = hd; el('tor_list').innerHTML = l;
+  if (j.ok && j.categories) { var ck = JSON.stringify(j.categories); if (ck !== torCatKey) { torCatKey = ck; var cs = el('tor_cat'), keep = cs.value; cs.innerHTML = torCatOpts(j.categories); cs.value = j.categories.indexOf(keep) >= 0 ? keep : ''; } }   // v1.20: your own categories (Torrents 1.8)
   el('tor_searchbox').style.display = j.ok && j.running && j.canSearch ? '' : 'none';
 }
 function torAdd() {
@@ -1020,7 +1047,7 @@ var torResults = [];
 function torSearch() {
   var q = el('tor_q').value.trim(); if (q.length < 2) { toast('Type what to search for'); return; }
   var b = el('tor_sbtn'); b.disabled = true; b.textContent = 'Searching...'; el('tor_results').innerHTML = '<div class="note2">Searching your indexers over the VPN - this can take up to 20 s.</div>';
-  post({ app: 'tor', do: 'search', q: q, scat: el('tor_scat').value }).then(function (j) {
+  post({ app: 'tor', do: 'search', q: q, scat: el('tor_scat').value, sid: torSid }).then(function (j) {
     b.disabled = false; b.textContent = 'Search'; torResults = j.results || [];
     el('tor_results').innerHTML = !j.ok ? '<div class="note2">' + esc(j.msg || '') + '</div>' : !torResults.length ? '<div class="note2">Nothing found.</div>' : torResults.map(function (r, i) {
       var bad = r.flags && r.flags.length;
@@ -1029,7 +1056,7 @@ function torSearch() {
     }).join('');
   });
 }
-function torSearchAdd(i, b) { var r = torResults[i]; if (!r) return; b.disabled = true; post({ app: 'tor', do: 'searchadd', id: r.id, cat: '' }).then(function (j) { if (j.ok) b.textContent = 'Added'; else b.disabled = false; torLast = ''; torPoll(); }); }
+function torSearchAdd(i, b) { var r = torResults[i]; if (!r) return; b.disabled = true; post({ app: 'tor', do: 'searchadd', id: r.id, cat: '', sid: torSid }).then(function (j) { if (j.ok) b.textContent = 'Added'; else b.disabled = false; torLast = ''; torPoll(); }); }
 function play(i, name) { if (confirm('Start ' + name + ' on your PC?')) act('a=play&i=' + i); }
 function load() {
   fetch(base + 'api/state', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (s) { last = s; render(s); })

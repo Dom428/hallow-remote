@@ -7,6 +7,15 @@ HOW TO INSTALL
 4. Scan the code it shows with your phone's camera, then "Add to Home screen".
    If Windows asks whether Hallow Remote can use the network, allow private networks.
 
+WHAT'S NEW IN 1.20
+- Catches up with the newer apps. Hallow VPN 1.2.6: the phone hides buttons that would make Windows ask (UAC) and says why,
+  shows whether Windows has your Nord login, and a connect from the phone no longer changes the server you picked on the PC.
+  Hallow Torrents 1.8: your own categories when you add a magnet link, and each phone keeps its own search results.
+  Hallow Gear: "last known - 12 min ago", "waiting for its battery report (game running)" and a Refresh button.
+  Hallow Tasks: faster live numbers, busy apps and Not responding apps (counts only). Hallow Home: Feed now offers Home's
+  own range and shows Demo mode. Hallow Email: unread per account and why one needs attention (your label only when it
+  isn't an email address). Hallow Mixer 3.27: "Spotify ad muted" and ads muted today.
+
 WHAT'S NEW IN 1.19
 - Hallow Authenticator: your 2FA codes on your phone, a replacement for Microsoft Authenticator. On the phone's Home tab
   tap Authenticator (needs HTTPS - see below), install it, and add your accounts. The codes stay on the phone, encrypted,
